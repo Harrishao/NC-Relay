@@ -1,6 +1,6 @@
 [server]
 port = 4396
-debug = true
+debug = false
 
 [http]
 port = 7777
