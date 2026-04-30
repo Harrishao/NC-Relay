@@ -53,14 +53,18 @@ pip install -r requirements.txt
 ```ini
 [server]
 port = 6199            # 你在 NapCat 建立的 WebSocket 客户端端口号
-debug = true           # 设为true时，仅 /st 前缀消息触发响应
+debug = false          # 没用，但可能以后有用，总之别动它
 
 [http]
 port = 6200            # 你在酒馆填的端口号
 
 [llm]
-base_url = Harrishao   #你的 API base_url，API KEY 由程序从酒馆获取
+base_url = Clearlove7  # 你的 API base_url，API KEY 由程序从酒馆获取
 timeout = 120          # LLM 请求超时 (秒)，不用动它
+
+[admin]
+admins = 43967777,<账号2>,<账号3>     # 账号间用英文半角逗号分隔
+admin_mode = false     # 启动时管理员模式的默认开关
 ```
 
 ### 5. 启动
