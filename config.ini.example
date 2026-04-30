@@ -1,0 +1,10 @@
+[server]
+port = 6199
+debug = true
+
+[http]
+port = 6200
+
+[llm]
+base_url =
+timeout = 120
