@@ -25,3 +25,6 @@ async def echo_group_msg(websocket, group_id, message):
         "send_group_msg",
         {"group_id": group_id, "message": message},
     )
+"""
+随便写点注释，重新push一次
+"""
