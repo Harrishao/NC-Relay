@@ -3,8 +3,8 @@
   "enabled": true,
   "name": "【NC-Relay2ST】酒馆接入NapCat",
   "id": "85acaad7-1c89-4b08-8a5b-1691a90e9537",
-  "content": "import 'http://localhost:__NC_HTTP_PORT__/nc-relay.js'",
-  "info": "<h3>NC-Relay2ST QQ Bridge</h3><p>QQ ↔ SillyTavern 双向消息转发桥接。</p><p>依赖 NC-Relay2ST 服务运行在 localhost:__NC_HTTP_PORT__。</p>",
+  "content": "import 'http://localhost:6200/nc-relay.js'",
+  "info": "<h3>NC-Relay2ST QQ Bridge</h3><p>QQ ↔ SillyTavern 双向消息转发桥接。</p><p>依赖 NC-Relay2ST 服务运行在 localhost:6200。</p>",
   "button": {
     "enabled": false,
     "buttons": []

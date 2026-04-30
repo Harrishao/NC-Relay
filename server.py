@@ -139,20 +139,19 @@ def _inject_ports(filepath, content_type):
     with open(filepath, "r", encoding="utf-8") as f:
         content = f.read()
     content = content.replace("__NC_WS_PORT__", str(WS_PORT))
-    content = content.replace("__NC_HTTP_PORT__", str(HTTP_PORT))
-    return web.Response(text=content, content_type=content_type, headers={
-        "Access-Control-Allow-Origin": "*",
-    })
+    content = content.replace("localhost:6200", f"localhost:{HTTP_PORT}")
+    return web.Response(text=content, content_type=content_type, charset="utf-8",
+                        headers={"Access-Control-Allow-Origin": "*"})
 
 
 async def serve_extension_js(request):
     js_path = os.path.join(BASE_DIR, "sillytavern-nc-relay.js")
-    return _inject_ports(js_path, "application/javascript; charset=utf-8")
+    return _inject_ports(js_path, "application/javascript")
 
 
 async def serve_extension_json(request):
     json_path = os.path.join(BASE_DIR, "nc-relay-st-extension.json")
-    return _inject_ports(json_path, "application/json; charset=utf-8")
+    return _inject_ports(json_path, "application/json")
 
 
 def create_app():
