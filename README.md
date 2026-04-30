@@ -44,7 +44,7 @@ pip install -r requirements.txt
 - 在酒馆助手内导入脚本`nc-relay-st-extension.json`
 - 在酒馆中 API 连接配置选 OpenAI 兼容端口，基础 URL 填`http://127.0.0.1:6200`（注意不是https）
 
-#### 3.1 **注意：由于`.js`文件和`.json`文件中的端口号是硬写入的，而非从`config.ini`读取，若想自定义端口号，记得连带修改`nc-relay-st-extension.json`和`sillytavern-nc-relay.js`中的端口号**
+#### 3.1 **注意：由于`.json`文件中的端口号是硬写入的，而非从`config.ini`读取，若想自定义端口号，记得连带修改`nc-relay-st-extension.json`中的端口号**
 
 ### 4. 配置`config.ini`
 
@@ -59,7 +59,7 @@ debug = true           # 设为true时，仅 /st 前缀消息触发响应
 port = 6200            # 你在酒馆填的端口号
 
 [llm]
-base_url = Harrishao  #你的 API base_url，API KEY 从酒馆获取
+base_url = Harrishao   #你的 API base_url，API KEY 由程序从酒馆获取
 timeout = 120          # LLM 请求超时 (秒)，不用动它
 ```
 
