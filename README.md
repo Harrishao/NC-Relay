@@ -1,0 +1,103 @@
+# NC-Relay2ST
+
+NapCat ↔ SillyTavern 双向消息桥接服务 — 通过 NapCat 接收 QQ 消息，注入酒馆输入框触发 LLM 对话，并将回复实时回传 QQ。
+
+理论上其他支持 OneBot 协议的框架也都可以使用
+
+
+
+## 消息流程详解
+
+### NapCat → ST
+
+1. 用户在 QQ 发送 `/st 你好`
+2. NapCat 通过反向 WebSocket 推送到 NC-Relay2ST
+3. NC-Relay2ST 接收到消息后转发至酒馆助手脚本`sillytavern-nc-relay.js`
+4. 脚本通过反向 WebSocket 从 NC-Relay2ST 接收消息，填入酒馆输入框，模拟点击发送按钮
+5. NC-Relay2ST 捕获从酒馆发出的消息，转发至配置好的LLM API
+
+### LLM → NapCat
+
+1. 流式响应通过 SSE 逐 chunk 返回给酒馆（酒馆界面内实时显示），同时消息被填入缓存区
+2. 完整响应收集完毕后，NC-Relay2ST 拼接消息，形成完整的正文，并发往 NapCat
+3. QQ 用户收到完整正文
+
+
+
+## 快速开始
+
+### 1. 环境要求
+
+- Python 3.8+
+- NapCat 或其他支持 OneBot 协议的框架
+- SillyTavern 和酒馆助手扩展
+
+### 2. 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. 配置 NapCat 和酒馆助手脚本
+
+- 在 NapCat 建立一个 WebSocket 客户端，地址填`127.0.0.1:6199`，token留空
+- 在酒馆助手内导入脚本`nc-relay-st-extension.json`
+- 在酒馆中 API 连接配置选 OpenAI 兼容端口，基础 URL 填`http://127.0.0.1:6200`（注意不是https）
+
+#### 3.1 **注意：由于`.js`文件和`.json`文件中的端口号是硬写入的，而非从`config.ini`读取，若想自定义端口号，记得连带修改`nc-relay-st-extension.json`和`sillytavern-nc-relay.js`中的端口号**
+
+### 4. 配置`config.ini`
+
+`config.ini`中的各项说明:
+
+```ini
+[server]
+port = 6199            # 你在 NapCat 建立的 WebSocket 客户端端口号
+debug = true           # 设为true时，仅 /st 前缀消息触发响应
+
+[http]
+port = 6200            # 你在酒馆填的端口号
+
+[llm]
+base_url = Harrishao  #你的 API base_url，API KEY 从酒馆获取
+timeout = 120          # LLM 请求超时 (秒)，不用动它
+```
+
+### 5. 启动
+
+```bash
+python main.py
+```
+
+输出示例：
+```
+[启动] HTTP 代理服务监听在 http://0.0.0.0:6200
+[启动] WebSocket 服务监听在 ws://0.0.0.0:6199  (debug=True)
+```
+
+## 调试
+
+### 控制台日志
+
+NC-Relay2ST 在控制台输出详细日志，前缀标识来源：
+- `[NapCat]` — NapCat 连接事件
+- `[收到消息]` — 原始 QQ 消息 JSON
+- `[relay]` — 消息桥接（推送/回传）
+- `[responder]` — 消息过滤分发
+- `[echo]` — QQ 消息发送 payload
+- `[server]` — HTTP 请求处理
+
+### 请求/响应快照
+
+NC-Relay2ST 将最近一次请求和 LLM 响应分别保存到 `message.json` 和 `response.json`，便于调试。
+
+### 浏览器控制台
+
+酒馆扩展脚本在浏览器 F12 控制台输出 `[NC-Relay]` 前缀日志，包含轮询状态、消息检测、回传确认等信息。
+
+### 还打算加入的功能
+
+- 在接收消息至回复传回期间屏蔽除`/st /stop`外的其他传入消息
+- 加入一个管理员模式，用`/admin`切换，管理员模式下仅响应白名单成员消息
+- 实现通过 STscript 指令远程操控酒馆
+- 写一个`/help` List
