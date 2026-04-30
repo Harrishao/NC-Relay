@@ -1,33 +1,130 @@
 import relay
+import admin
+import echo
 
-PREFIX = "/st"
+_CMDS = {
+    "/st":         "_cmd_st",
+    "/stop":       "_cmd_stop",
+    "/admin":      "_cmd_admin",
+    "/admin.add":  "_cmd_admin_add",
+    "/admin.del":  "_cmd_admin_del",
+}
 
 
-def should_respond(message):
-    """仅响应以 /st 开头的消息"""
+def _extract_text(message):
     if isinstance(message, str):
-        return message.startswith(PREFIX)
+        return message
     if isinstance(message, list):
+        parts = []
         for seg in message:
             if isinstance(seg, dict) and seg.get("type") == "text":
-                text = seg.get("data", {}).get("text", "")
-                if text.startswith(PREFIX):
-                    return True
-    return False
+                parts.append(seg.get("data", {}).get("text", ""))
+        return "".join(parts)
+    return str(message or "")
 
 
-async def handle_message(websocket, data):
-    """事件响应入口，过滤后分发"""
-    if data.get("post_type") != "message":
+def _parse_command(message):
+    text = _extract_text(message).strip()
+    for cmd in sorted(_CMDS, key=len, reverse=True):
+        if text == cmd:
+            return _CMDS[cmd], ""
+        if text.startswith(cmd + " "):
+            return _CMDS[cmd], text[len(cmd):].strip()
+    return None, None
+
+
+async def _reply(websocket, data, text):
+    msg_type = data.get("message_type")
+    if msg_type == "group":
+        group_id = data.get("group_id")
+        if group_id:
+            await echo.echo_group_msg(websocket, group_id, text)
+            return
+    user_id = data.get("user_id")
+    if user_id:
+        await echo.echo_private_msg(websocket, user_id, text)
+
+
+async def _cmd_st(websocket, data, args):
+    user_id = str(data.get("user_id", ""))
+
+    if not admin.is_whitelisted(user_id):
+        await _reply(websocket, data, "管理员模式已开启，您不在白名单中。")
         return
 
-    message = data.get("message", "")
-    if not should_respond(message):
+    if relay.is_locked():
+        await _reply(websocket, data, "正在处理上一条消息，请稍候或使用 /stop 中止。")
         return
 
     msg_type = data.get("message_type")
-    if msg_type == "private":
-        user_id = data.get("user_id")
-        if user_id and message:
-            await relay.push_to_st(websocket, data)
-            print(f"[responder] 转发 /st 消息到 ST, user_id={user_id}")
+    if msg_type not in ("private", "group"):
+        return
+
+    if not data.get("user_id") or not data.get("message"):
+        return
+
+    relay_id = await relay.push_to_st(websocket, data)
+    if relay_id:
+        relay.acquire_lock(relay_id)
+
+
+async def _cmd_stop(websocket, data, args):
+    cancelled = await relay.cancel_processing()
+    if cancelled:
+        await _reply(websocket, data, "已中止当前处理。")
+    else:
+        await _reply(websocket, data, "当前没有正在处理的消息。")
+
+
+async def _cmd_admin(websocket, data, args):
+    user_id = str(data.get("user_id", ""))
+    if not admin.is_l1_admin(user_id):
+        return
+    new_state = admin.toggle_admin_mode()
+    state_str = "开启" if new_state else "关闭"
+    await _reply(websocket, data, f"管理员模式已{state_str}。")
+
+
+async def _cmd_admin_add(websocket, data, args):
+    user_id = str(data.get("user_id", ""))
+    if not admin.is_l1_admin(user_id):
+        return
+    target = args.strip()
+    if not target:
+        await _reply(websocket, data, "用法: /admin.add <QQ号>")
+        return
+    admin.add_whitelist(target)
+    await _reply(websocket, data, f"已将 {target} 加入白名单。")
+
+
+async def _cmd_admin_del(websocket, data, args):
+    user_id = str(data.get("user_id", ""))
+    if not admin.is_l1_admin(user_id):
+        return
+    target = args.strip()
+    if not target:
+        await _reply(websocket, data, "用法: /admin.del <QQ号>")
+        return
+    admin.remove_whitelist(target)
+    await _reply(websocket, data, f"已将 {target} 移出白名单。")
+
+
+_CMD_HANDLERS = {
+    "_cmd_st":        _cmd_st,
+    "_cmd_stop":      _cmd_stop,
+    "_cmd_admin":     _cmd_admin,
+    "_cmd_admin_add": _cmd_admin_add,
+    "_cmd_admin_del": _cmd_admin_del,
+}
+
+
+async def handle_message(websocket, data):
+    if data.get("post_type") != "message":
+        return
+
+    cmd_func_name, args = _parse_command(data.get("message", ""))
+    if cmd_func_name is None:
+        return
+
+    handler = _CMD_HANDLERS[cmd_func_name]
+    await handler(websocket, data, args)

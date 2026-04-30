@@ -51,6 +51,8 @@
                 var data = JSON.parse(event.data);
                 if (data.type === "qq_message") {
                     handleQQMessage(data);
+                } else if (data.type === "stop") {
+                    handleStopMessage(data);
                 }
             } catch (e) {
                 console.error("[NC-Relay2ST] 消息解析失败:", e);
@@ -133,6 +135,18 @@
 
         // 轮询等待 LLM 回复
         startPolling();
+    }
+
+    function handleStopMessage(data) {
+        console.log("[NC-Relay2ST] 收到停止指令, relay_id=" + data.relay_id);
+        if (pendingRelayId === data.relay_id) {
+            pendingRelayId = null;
+            stopPolling();
+            lastMesLen = 0;
+            stableCount = 0;
+            pollCount = 0;
+            notify("QQ消息处理已停止", "warning");
+        }
     }
 
     function startPolling() {

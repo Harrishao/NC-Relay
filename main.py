@@ -4,6 +4,7 @@ import configparser
 import websockets
 from aiohttp import web
 
+import admin
 import responder
 import relay
 import server
@@ -28,9 +29,9 @@ async def handle_napcat(websocket, debug):
             except json.JSONDecodeError:
                 print(f"[原始消息] {raw}")
                 continue
-            print(f"[收到消息] {json.dumps(data, indent=2, ensure_ascii=False)}")
             if debug:
-                await responder.handle_message(websocket, data)
+                print(f"[收到消息] {json.dumps(data, indent=2, ensure_ascii=False)}")
+            await responder.handle_message(websocket, data)
     except websockets.exceptions.ConnectionClosed as e:
         print(f"[NapCat] 断开: {e}")
 
@@ -62,6 +63,7 @@ async def handle_ws(websocket, debug):
 
 async def main():
     config = load_config()
+    admin.init()
     port = config["port"]
     http_port = config["http_port"]
     debug = config["debug"]
