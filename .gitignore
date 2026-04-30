@@ -1,4 +1,5 @@
 .claude
 .idea
-.postman
-postman
+console_logs
+message.json
+response.json
