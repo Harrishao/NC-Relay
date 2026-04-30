@@ -145,6 +145,14 @@
             lastMesLen = 0;
             stableCount = 0;
             pollCount = 0;
+
+            // 点击酒馆的中止按钮停止 LLM 生成
+            var stopBtn = topDoc.getElementById("mes_stop");
+            if (stopBtn) {
+                stopBtn.click();
+                console.log("[NC-Relay2ST] 已触发酒馆中止按钮");
+            }
+
             notify("QQ消息处理已停止", "warning");
         }
     }
