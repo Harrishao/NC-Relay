@@ -1,7 +1,7 @@
-# 去看branch！
+# 去看branches！
 
-## 去看branch！
+## 去看branches！
 
-### 去看branch！
+### 去看branches！
 
 #### あわわわ…
