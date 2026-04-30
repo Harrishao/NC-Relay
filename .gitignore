@@ -1,6 +1,8 @@
 .claude
 .idea
 console_logs
+__pycache__
 config.ini
 message.json
 response.json
+

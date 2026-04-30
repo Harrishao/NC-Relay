@@ -13,6 +13,8 @@ config.read(os.path.join(BASE_DIR, "config.ini"))
 
 LLM_BASE_URL = config.get("llm", "base_url", fallback="https://api.deepseek.com/beta")
 LLM_TIMEOUT = config.getint("llm", "timeout", fallback=120)
+WS_PORT = config.getint("server", "port", fallback=6199)
+HTTP_PORT = config.getint("http", "port", fallback=6200)
 
 MESSAGE_FILE = os.path.join(BASE_DIR, "message.json")
 RESPONSE_FILE = os.path.join(BASE_DIR, "response.json")
@@ -133,17 +135,30 @@ async def handle_chat_completions(request):
         return web.Response(text=f"Upstream request failed: {e}", status=502)
 
 
-async def serve_extension_js(request):
-    js_path = os.path.join(BASE_DIR, "sillytavern-nc-relay.js")
-    return web.FileResponse(js_path, headers={
-        "Content-Type": "application/javascript; charset=utf-8",
+def _inject_ports(filepath, content_type):
+    with open(filepath, "r", encoding="utf-8") as f:
+        content = f.read()
+    content = content.replace("__NC_WS_PORT__", str(WS_PORT))
+    content = content.replace("__NC_HTTP_PORT__", str(HTTP_PORT))
+    return web.Response(text=content, content_type=content_type, headers={
         "Access-Control-Allow-Origin": "*",
     })
+
+
+async def serve_extension_js(request):
+    js_path = os.path.join(BASE_DIR, "sillytavern-nc-relay.js")
+    return _inject_ports(js_path, "application/javascript; charset=utf-8")
+
+
+async def serve_extension_json(request):
+    json_path = os.path.join(BASE_DIR, "nc-relay-st-extension.json")
+    return _inject_ports(json_path, "application/json; charset=utf-8")
 
 
 def create_app():
     app = web.Application()
     app.router.add_post("/chat/completions", handle_chat_completions)
     app.router.add_get("/nc-relay.js", serve_extension_js)
+    app.router.add_get("/nc-relay-st-extension.json", serve_extension_json)
     app.router.add_get("/health", lambda r: web.Response(text="OK"))
     return app

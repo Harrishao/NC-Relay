@@ -1,18 +1,18 @@
-// NC-Relay bridge for SillyTavern
-// 由 NC-Relay HTTP 服务提供, 通过 ST 插件脚本 import 加载
+// NC-Relay2ST bridge for SillyTavern
+// 由 NC-Relay2ST HTTP 服务提供, 通过 ST 插件脚本 import 加载
 
 (function () {
     "use strict";
 
-    var NC_RELAY_WS_URL = "ws://localhost:6199/st";
+    var NC_RELAY_WS_URL = "ws://localhost:__NC_WS_PORT__/st";
     var topWin = window.parent || window;
     var topDoc = topWin.document;
 
     function notify(msg, type) {
-        console.log("[NC-Relay] " + msg);
+        console.log("[NC-Relay2ST] " + msg);
         try {
             if (topWin.toastr) {
-                topWin.toastr[type || "info"](msg, "NC-Relay");
+                topWin.toastr[type || "info"](msg, "NC-Relay2ST");
             }
         } catch (_) {}
     }
@@ -38,8 +38,8 @@
         ws = new WebSocket(NC_RELAY_WS_URL);
 
         ws.onopen = function () {
-            console.log("[NC-Relay] ST扩展已连接");
-            notify("NC-Relay QQ桥接已连接", "success");
+            console.log("[NC-Relay2ST] ST扩展已连接");
+            notify("NC-Relay2ST QQ桥接已连接", "success");
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer);
                 reconnectTimer = null;
@@ -53,17 +53,17 @@
                     handleQQMessage(data);
                 }
             } catch (e) {
-                console.error("[NC-Relay] 消息解析失败:", e);
+                console.error("[NC-Relay2ST] 消息解析失败:", e);
             }
         };
 
         ws.onclose = function () {
-            console.log("[NC-Relay] WebSocket断开, 5秒后重连");
+            console.log("[NC-Relay2ST] WebSocket断开, 5秒后重连");
             reconnectTimer = setTimeout(connect, 5000);
         };
 
         ws.onerror = function () {
-            console.error("[NC-Relay] WebSocket错误");
+            console.error("[NC-Relay2ST] WebSocket错误");
         };
     }
 
@@ -86,7 +86,7 @@
         var relay_id = data.relay_id;
         var rawMessage = data.message;
         var message = extractText(rawMessage);
-        console.log("[NC-Relay] 收到QQ消息: " + message + " (relay_id=" + relay_id + ")");
+        console.log("[NC-Relay2ST] 收到QQ消息: " + message + " (relay_id=" + relay_id + ")");
 
         pendingRelayId = relay_id;
         pollCount = 0;
@@ -96,7 +96,7 @@
         // 记录当前聊天长度，用于检测新回复
         var ctx = getST() && getST().getContext();
         lastChatLength = (ctx && ctx.chat) ? ctx.chat.length : 0;
-        console.log("[NC-Relay] lastChatLength=" + lastChatLength + ", ST found=" + !!getST());
+        console.log("[NC-Relay2ST] lastChatLength=" + lastChatLength + ", ST found=" + !!getST());
 
         // 去掉 /st 前缀
         var cleanMessage = message.replace(/^\/st\s*/, "");
@@ -104,7 +104,7 @@
         // 填入 ST 输入框（使用原生 DOM API + 触发 input 事件）
         var textarea = topDoc.getElementById("send_textarea");
         if (!textarea) {
-            console.error("[NC-Relay] 找不到 #send_textarea");
+            console.error("[NC-Relay2ST] 找不到 #send_textarea");
             return;
         }
 
@@ -120,15 +120,15 @@
         textarea.dispatchEvent(new Event("input", { bubbles: true }));
         textarea.dispatchEvent(new Event("change", { bubbles: true }));
 
-        console.log("[NC-Relay] 已填入输入框: " + cleanMessage);
+        console.log("[NC-Relay2ST] 已填入输入框: " + cleanMessage);
 
         // 触发发送按钮
         var sendBtn = topDoc.getElementById("send_but");
         if (sendBtn) {
             sendBtn.click();
-            console.log("[NC-Relay] 已触发发送");
+            console.log("[NC-Relay2ST] 已触发发送");
         } else {
-            console.error("[NC-Relay] 找不到 #send_but");
+            console.error("[NC-Relay2ST] 找不到 #send_but");
         }
 
         // 轮询等待 LLM 回复
@@ -155,7 +155,7 @@
 
         pollCount++;
         if (pollCount > 240) {
-            console.error("[NC-Relay] 轮询超时, 放弃 relay_id=" + pendingRelayId);
+            console.error("[NC-Relay2ST] 轮询超时, 放弃 relay_id=" + pendingRelayId);
             pendingRelayId = null;
             stopPolling();
             return;
@@ -165,7 +165,7 @@
         var ctx = st && st.getContext();
 
         if (pollCount <= 3 || pollCount % 10 === 0) {
-            console.log("[NC-Relay] 轮询#" + pollCount + " st=" + !!st + " ctx=" + !!ctx
+            console.log("[NC-Relay2ST] 轮询#" + pollCount + " st=" + !!st + " ctx=" + !!ctx
                 + " chatLen=" + (ctx && ctx.chat ? ctx.chat.length : "?")
                 + " last=" + lastChatLength);
         }
@@ -176,9 +176,9 @@
         if (messages.length <= lastChatLength) return;
 
         // 找到了新消息
-        console.log("[NC-Relay] 检测到新消息! chatLen " + lastChatLength + " -> " + messages.length);
+        console.log("[NC-Relay2ST] 检测到新消息! chatLen " + lastChatLength + " -> " + messages.length);
         for (var i = lastChatLength; i < messages.length; i++) {
-            console.log("[NC-Relay]  msg[" + i + "] is_user=" + messages[i].is_user + " is_system=" + messages[i].is_system + " mes_len=" + (messages[i].mes ? messages[i].mes.length : 0));
+            console.log("[NC-Relay2ST]  msg[" + i + "] is_user=" + messages[i].is_user + " is_system=" + messages[i].is_system + " mes_len=" + (messages[i].mes ? messages[i].mes.length : 0));
         }
 
         // 找最新一条 assistant 消息并等流式结束（mes 长度连续 4 轮不变）
@@ -201,9 +201,9 @@
                                 relay_id: relayId,
                                 content: msg.mes,
                             }));
-                            console.log("[NC-Relay] 回复已回传, relay_id=" + relayId + " len=" + currentLen);
+                            console.log("[NC-Relay2ST] 回复已回传, relay_id=" + relayId + " len=" + currentLen);
                         } else {
-                            console.error("[NC-Relay] ws不可用, readyState=" + (ws ? ws.readyState : "null"));
+                            console.error("[NC-Relay2ST] ws不可用, readyState=" + (ws ? ws.readyState : "null"));
                         }
                     }
                 } else {
@@ -216,6 +216,6 @@
     }
 
     // 初始化
-    console.log("[NC-Relay] 扩展已加载");
+    console.log("[NC-Relay2ST] 扩展已加载");
     connect();
 })();
