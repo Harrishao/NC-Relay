@@ -53,6 +53,8 @@
                     handleQQMessage(data);
                 } else if (data.type === "stop") {
                     handleStopMessage(data);
+                } else if (data.type === "get_last_message") {
+                    handleGetLastMessage(data);
                 }
             } catch (e) {
                 console.error("[NC-Relay2ST] 消息解析失败:", e);
@@ -154,6 +156,42 @@
             }
 
             notify("QQ消息处理已停止", "warning");
+        }
+    }
+
+    function handleGetLastMessage(data) {
+        console.log("[NC-Relay2ST] 收到获取最后一条消息的请求, relay_id=" + data.relay_id);
+        var relayId = data.relay_id;
+        var st = getST();
+        var ctx = st && st.getContext();
+        var chat = ctx && ctx.chat;
+
+        if (!chat || chat.length === 0) {
+            console.log("[NC-Relay2ST] 聊天记录为空");
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: "last_message",
+                    relay_id: relayId,
+                    content: "(聊天记录为空)"
+                }));
+            }
+            return;
+        }
+
+        var lastMsg = chat[chat.length - 1];
+        var content = lastMsg && lastMsg.mes ? lastMsg.mes : "(空消息)";
+        var sender = lastMsg && lastMsg.name ? lastMsg.name : "";
+        if (sender) {
+            content = "[" + sender + "] " + content;
+        }
+
+        console.log("[NC-Relay2ST] 返回最后一条消息, len=" + content.length);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: "last_message",
+                relay_id: relayId,
+                content: content
+            }));
         }
     }
 

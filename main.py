@@ -42,8 +42,11 @@ async def handle_st_extension(websocket):
         async for raw in websocket:
             try:
                 data = json.loads(raw)
-                if data.get("type") == "st_response":
+                msg_type = data.get("type")
+                if msg_type == "st_response":
                     await relay.handle_st_response(data)
+                elif msg_type == "last_message":
+                    await relay.handle_last_message_response(data)
             except json.JSONDecodeError:
                 pass
     except websockets.exceptions.ConnectionClosed:

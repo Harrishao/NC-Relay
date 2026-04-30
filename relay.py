@@ -85,7 +85,31 @@ async def push_to_st(napcat_ws, data):
     return relay_id
 
 
+async def request_last_message(napcat_ws, data):
+    global _st_ws
+    if _st_ws is None:
+        print("[relay] 未连接到脚本，无法请求消息")
+        return None
+
+    relay_id = str(uuid.uuid4())[:8]
+    _pending[relay_id] = {
+        "napcat_ws": napcat_ws,
+        "user_id": data.get("user_id"),
+        "group_id": data.get("group_id"),
+    }
+    await _st_ws.send(json.dumps({"type": "get_last_message", "relay_id": relay_id}, ensure_ascii=False))
+    print(f"[relay] 请求 ST 最近一条消息, relay_id={relay_id}")
+    return relay_id
+
+
 async def handle_st_response(data):
+    relay_id = data.get("relay_id")
+    content = data.get("content")
+    if relay_id and content:
+        await send_to_qq(relay_id, content)
+
+
+async def handle_last_message_response(data):
     relay_id = data.get("relay_id")
     content = data.get("content")
     if relay_id and content:

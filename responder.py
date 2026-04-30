@@ -5,6 +5,7 @@ import echo
 _CMDS = {
     "/st":         "_cmd_st",
     "/stop":       "_cmd_stop",
+    "/lastmsg":    "_cmd_lastmsg",
     "/admin":      "_cmd_admin",
     "/admin.add":  "_cmd_admin_add",
     "/admin.del":  "_cmd_admin_del",
@@ -109,9 +110,26 @@ async def _cmd_admin_del(websocket, data, args):
     await _reply(websocket, data, f" {target} 被移出白名单了哦")
 
 
+async def _cmd_lastmsg(websocket, data, args):
+    user_id = str(data.get("user_id", ""))
+
+    if not admin.is_whitelisted(user_id):
+        await _reply(websocket, data, "管理员模式已开启，可是你不在白名单哦...")
+        return
+
+    msg_type = data.get("message_type")
+    if msg_type not in ("private", "group"):
+        return
+
+    relay_id = await relay.request_last_message(websocket, data)
+    if relay_id is None:
+        await _reply(websocket, data, "尚未连接到酒馆，暂时无法获取消息。")
+
+
 _CMD_HANDLERS = {
     "_cmd_st":        _cmd_st,
     "_cmd_stop":      _cmd_stop,
+    "_cmd_lastmsg":   _cmd_lastmsg,
     "_cmd_admin":     _cmd_admin,
     "_cmd_admin_add": _cmd_admin_add,
     "_cmd_admin_del": _cmd_admin_del,
