@@ -46,7 +46,7 @@ async def cancel_processing():
 def register_st(websocket):
     global _st_ws
     _st_ws = websocket
-    print(f"[relay] ST 扩展已注册")
+    print(f"[relay] NC-Relay2ST 脚本已注册")
 
 
 def unregister_st(websocket):
@@ -54,13 +54,13 @@ def unregister_st(websocket):
     if _st_ws is websocket:
         _st_ws = None
         release_lock()
-        print(f"[relay] ST 扩展已断开, 已释放处理锁")
+        print(f"[relay] NC-Relay2ST 脚本已断开, 已释放处理锁")
 
 
 async def push_to_st(napcat_ws, data):
     global _st_ws
     if _st_ws is None:
-        print("[relay] 没有 ST 扩展连接，无法推送")
+        print("[relay] 未连接到脚本，无法推送")
         return None
 
     user_id = data.get("user_id")
@@ -107,7 +107,7 @@ async def send_to_qq(relay_id, content):
     else:
         user_id = info["user_id"]
         await echo.echo_private_msg(napcat_ws, user_id, content)
-        print(f"[relay] LLM 回复已发送到 QQ, user_id={user_id}")
+        print(f"[relay] LLM 回复已发送到私聊消息, user_id={user_id}")
 
     if _processing_relay_id == relay_id:
         release_lock()

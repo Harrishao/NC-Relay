@@ -49,11 +49,11 @@ async def _cmd_st(websocket, data, args):
     user_id = str(data.get("user_id", ""))
 
     if not admin.is_whitelisted(user_id):
-        await _reply(websocket, data, "管理员模式已开启，您不在白名单中。")
+        await _reply(websocket, data, "管理员模式已开启，可是你不在白名单哦...")
         return
 
     if relay.is_locked():
-        await _reply(websocket, data, "正在处理上一条消息，请稍候或使用 /stop 中止。")
+        await _reply(websocket, data, "有处理中的消息，等一会吧...或者使用/stop 中止？")
         return
 
     msg_type = data.get("message_type")
@@ -71,9 +71,9 @@ async def _cmd_st(websocket, data, args):
 async def _cmd_stop(websocket, data, args):
     cancelled = await relay.cancel_processing()
     if cancelled:
-        await _reply(websocket, data, "已中止当前处理。")
+        await _reply(websocket, data, "消息处理中止了哦")
     else:
-        await _reply(websocket, data, "当前没有正在处理的消息。")
+        await _reply(websocket, data, "没有要终止的消息哦")
 
 
 async def _cmd_admin(websocket, data, args):
@@ -82,7 +82,7 @@ async def _cmd_admin(websocket, data, args):
         return
     new_state = admin.toggle_admin_mode()
     state_str = "开启" if new_state else "关闭"
-    await _reply(websocket, data, f"管理员模式已{state_str}。")
+    await _reply(websocket, data, f"收到，已{state_str}管理员模式")
 
 
 async def _cmd_admin_add(websocket, data, args):
@@ -94,7 +94,7 @@ async def _cmd_admin_add(websocket, data, args):
         await _reply(websocket, data, "用法: /admin.add <QQ号>")
         return
     admin.add_whitelist(target)
-    await _reply(websocket, data, f"已将 {target} 加入白名单。")
+    await _reply(websocket, data, f"将 {target} 加入白名单了哦")
 
 
 async def _cmd_admin_del(websocket, data, args):
@@ -106,7 +106,7 @@ async def _cmd_admin_del(websocket, data, args):
         await _reply(websocket, data, "用法: /admin.del <QQ号>")
         return
     admin.remove_whitelist(target)
-    await _reply(websocket, data, f"已将 {target} 移出白名单。")
+    await _reply(websocket, data, f" {target} 被移出白名单了哦")
 
 
 _CMD_HANDLERS = {
