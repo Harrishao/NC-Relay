@@ -108,8 +108,10 @@ async def handle_chat_completions(request):
                     parsed = llm.parse_sse(full_body)
                     save_response(parsed)
                     content = llm.extract_content(parsed)
+                    reasoning = llm.extract_reasoning(parsed)
+                    relay.set_last_server_reasoning(reasoning)
                     if relay_id and content:
-                        await relay.send_to_qq(relay_id, content)
+                        await relay.send_to_qq(relay_id, content, reasoning)
 
                     return resp
                 else:
@@ -121,8 +123,10 @@ async def handle_chat_completions(request):
                     save_response(parsed)
 
                     content = llm.extract_content(parsed) if isinstance(parsed, dict) else None
+                    reasoning = llm.extract_reasoning(parsed) if isinstance(parsed, dict) else None
+                    relay.set_last_server_reasoning(reasoning)
                     if relay_id and content:
-                        await relay.send_to_qq(relay_id, content)
+                        await relay.send_to_qq(relay_id, content, reasoning)
 
                     return web.Response(
                         body=resp_body,

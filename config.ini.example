@@ -12,3 +12,9 @@ timeout = 120
 [admin]
 admins =
 admin_mode = false
+
+[render]
+enable = true
+image_threshold = 0
+include_reasoning = false
+image_width = 600

@@ -55,6 +55,11 @@ def extract_content(parsed_response):
         return parsed_response["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError):
         return None
-"""
-随便写点注释，重新push一次
-"""
+
+
+def extract_reasoning(parsed_response):
+    """从解析后的响应中提取 assistant 思维链"""
+    try:
+        return parsed_response["choices"][0]["message"].get("reasoning_content")
+    except (KeyError, IndexError, TypeError):
+        return None

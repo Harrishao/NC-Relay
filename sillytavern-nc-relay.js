@@ -256,12 +256,14 @@
                         stopPolling();
 
                         if (ws && ws.readyState === WebSocket.OPEN) {
+                            var reasoning = msg.extra && (msg.extra.reasoning || msg.extra.reasoning_content) || "";
                             ws.send(JSON.stringify({
                                 type: "st_response",
                                 relay_id: relayId,
                                 content: msg.mes,
+                                reasoning: reasoning,
                             }));
-                            console.log("[NC-Relay2ST] 回复已回传, relay_id=" + relayId + " len=" + currentLen);
+                            console.log("[NC-Relay2ST] 回复已回传, relay_id=" + relayId + " len=" + currentLen + " reasoning_len=" + (reasoning ? reasoning.length : 0));
                         } else {
                             console.error("[NC-Relay2ST] ws不可用, readyState=" + (ws ? ws.readyState : "null"));
                         }

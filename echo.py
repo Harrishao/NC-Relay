@@ -25,6 +25,29 @@ async def echo_group_msg(websocket, group_id, message):
         "send_group_msg",
         {"group_id": group_id, "message": message},
     )
-"""
-随便写点注释，重新push一次
-"""
+
+
+async def echo_private_image(websocket, user_id, image_path):
+    """发送图片到私聊"""
+    path = image_path.replace("\\", "/")
+    await _send_action(
+        websocket,
+        "send_private_msg",
+        {
+            "user_id": user_id,
+            "message": [{"type": "image", "data": {"file": f"file:///{path}"}}],
+        },
+    )
+
+
+async def echo_group_image(websocket, group_id, image_path):
+    """发送图片到群聊"""
+    path = image_path.replace("\\", "/")
+    await _send_action(
+        websocket,
+        "send_group_msg",
+        {
+            "group_id": group_id,
+            "message": [{"type": "image", "data": {"file": f"file:///{path}"}}],
+        },
+    )
