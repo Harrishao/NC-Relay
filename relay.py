@@ -127,19 +127,21 @@ async def handle_st_response(data):
     relay_id = data.get("relay_id")
     content = data.get("content")
     reasoning = data.get("reasoning")
+    rendered_html = data.get("rendered_html")
     if relay_id and content:
-        await send_to_qq(relay_id, content, reasoning)
+        await send_to_qq(relay_id, content, reasoning, rendered_html)
 
 
 async def handle_last_message_response(data):
     relay_id = data.get("relay_id")
     content = data.get("content")
     reasoning = data.get("reasoning")
+    rendered_html = data.get("rendered_html")
     if relay_id and content:
-        await send_to_qq(relay_id, content, reasoning)
+        await send_to_qq(relay_id, content, reasoning, rendered_html)
 
 
-async def send_to_qq(relay_id, content, reasoning_content=None):
+async def send_to_qq(relay_id, content, reasoning_content=None, rendered_html=None):
     global _last_server_reasoning
     info = _pending.pop(relay_id, None)
     if info is None:
@@ -168,7 +170,14 @@ async def send_to_qq(relay_id, content, reasoning_content=None):
                     print(f"[relay] 思维链图片已发送到私聊, user_id={user_id}")
 
         if RENDER_IMAGE_THRESHOLD != -1 and len(content) > RENDER_IMAGE_THRESHOLD:
-            img = await render.render_to_image(content, RENDER_OUTPUT_DIR, RENDER_IMAGE_WIDTH)
+            if rendered_html:
+                img = await render.render_html_to_image(
+                    rendered_html, RENDER_OUTPUT_DIR, RENDER_IMAGE_WIDTH
+                )
+            else:
+                img = await render.render_to_image(
+                    content, RENDER_OUTPUT_DIR, RENDER_IMAGE_WIDTH
+                )
             if img:
                 if group_id:
                     await echo.echo_group_image(napcat_ws, group_id, img)

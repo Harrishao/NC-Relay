@@ -5,7 +5,10 @@
     "use strict";
 
     var NC_RELAY_WS_URL = "ws://localhost:__NC_WS_PORT__/st";
-    var topWin = window.parent || window;
+    var topWin = (function() {
+        try { return window.top || window.parent || window; }
+        catch(e) { return window.parent || window; }
+    })();
     var topDoc = topWin.document;
 
     function notify(msg, type) {
@@ -186,11 +189,20 @@
         }
 
         console.log("[NC-Relay2ST] 返回最后一条消息, len=" + content.length);
+
+        // 捕获最后一条消息的DOM渲染内容
+        var renderedHtml = "";
+        var mesTextElements = topDoc.querySelectorAll('.mes_text');
+        if (mesTextElements.length > 0) {
+            renderedHtml = mesTextElements[mesTextElements.length - 1].innerHTML;
+        }
+
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
                 type: "last_message",
                 relay_id: relayId,
-                content: content
+                content: content,
+                rendered_html: renderedHtml,
             }));
         }
     }
@@ -257,13 +269,32 @@
 
                         if (ws && ws.readyState === WebSocket.OPEN) {
                             var reasoning = msg.extra && (msg.extra.reasoning || msg.extra.reasoning_content) || "";
+
+                            // 捕获酒馆渲染后的DOM内容（包含插件注入的HTML/SVG等）
+                            var renderedHtml = "";
+                            var mesTextElements = topDoc.querySelectorAll('.mes_text');
+                            // 取msg.mes前20个非空白字符作为搜索关键词
+                            var searchKey = msg.mes.replace(/\s+/g, '').substring(0, 20);
+                            for (var k = mesTextElements.length - 1; k >= 0; k--) {
+                                var elText = (mesTextElements[k].textContent || "").replace(/\s+/g, '');
+                                if (searchKey.length >= 5 && elText.indexOf(searchKey) !== -1) {
+                                    renderedHtml = mesTextElements[k].innerHTML;
+                                    break;
+                                }
+                            }
+                            // 回退：使用最后一个.mes_text
+                            if (!renderedHtml && mesTextElements.length > 0) {
+                                renderedHtml = mesTextElements[mesTextElements.length - 1].innerHTML;
+                            }
+
                             ws.send(JSON.stringify({
                                 type: "st_response",
                                 relay_id: relayId,
                                 content: msg.mes,
                                 reasoning: reasoning,
+                                rendered_html: renderedHtml,
                             }));
-                            console.log("[NC-Relay2ST] 回复已回传, relay_id=" + relayId + " len=" + currentLen + " reasoning_len=" + (reasoning ? reasoning.length : 0));
+                            console.log("[NC-Relay2ST] 回复已回传, relay_id=" + relayId + " len=" + currentLen + " reasoning_len=" + (reasoning ? reasoning.length : 0) + " rendered_html_len=" + (renderedHtml ? renderedHtml.length : 0));
                         } else {
                             console.error("[NC-Relay2ST] ws不可用, readyState=" + (ws ? ws.readyState : "null"));
                         }
