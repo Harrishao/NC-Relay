@@ -1,0 +1,21 @@
+[server]
+port = 6199
+debug = false
+
+[http]
+port = 6200
+
+[llm]
+base_url =
+timeout = 120
+
+[admin]
+admins =
+admin_mode = false
+
+[render]
+enable = true
+image_threshold = 0
+include_html_blocks = true
+include_reasoning = false
+image_width = 600

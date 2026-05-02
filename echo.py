@@ -1,0 +1,53 @@
+import json
+
+
+async def _send_action(websocket, action, params, echo=None):
+    payload = {"action": action, "params": params}
+    if echo is not None:
+        payload["echo"] = echo
+    await websocket.send(json.dumps(payload, ensure_ascii=False))
+    print(f"[echo] {json.dumps(payload, indent=2, ensure_ascii=False)}")
+
+
+async def echo_private_msg(websocket, user_id, message):
+    """回显私聊消息（仅在调试模式下调用）"""
+    await _send_action(
+        websocket,
+        "send_private_msg",
+        {"user_id": user_id, "message": message},
+    )
+
+
+async def echo_group_msg(websocket, group_id, message):
+    """回显群聊消息（仅在调试模式下调用）"""
+    await _send_action(
+        websocket,
+        "send_group_msg",
+        {"group_id": group_id, "message": message},
+    )
+
+
+async def echo_private_image(websocket, user_id, image_path):
+    """发送图片到私聊"""
+    path = image_path.replace("\\", "/")
+    await _send_action(
+        websocket,
+        "send_private_msg",
+        {
+            "user_id": user_id,
+            "message": [{"type": "image", "data": {"file": f"file:///{path}"}}],
+        },
+    )
+
+
+async def echo_group_image(websocket, group_id, image_path):
+    """发送图片到群聊"""
+    path = image_path.replace("\\", "/")
+    await _send_action(
+        websocket,
+        "send_group_msg",
+        {
+            "group_id": group_id,
+            "message": [{"type": "image", "data": {"file": f"file:///{path}"}}],
+        },
+    )
