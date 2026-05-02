@@ -127,6 +127,11 @@ def strip_code_blocks(text: str) -> str:
     return re.sub(r'```[^\n]*\n.*?```', '', text, flags=re.DOTALL).strip()
 
 
+def strip_html_code_blocks(text: str) -> str:
+    """仅移除```html代码块，保留其他内容"""
+    return re.sub(r'```html\s*\n.*?```', '', text, flags=re.DOTALL).strip()
+
+
 def _clean_message(text: str) -> str:
     """清洗CQ码和XML标签残留"""
     text = re.sub(r'\[CQ:[^\]]*\]', '', text)
@@ -208,6 +213,10 @@ def _strip_encoded_html(text: str) -> str:
     for tag in ['&lt;!DOCTYPE[^&]*&gt;', '&lt;html[^&]*&gt;', '&lt;/html&gt;',
                 '&lt;head&gt;', '&lt;/head&gt;', '&lt;/script&gt;']:
         text = re.sub(r'\s*' + tag, '', text, flags=re.DOTALL)
+    # 移除TH-message插件iframe（srcdoc内容无法在file://下渲染，留下空白）
+    text = re.sub(r'<iframe[^>]*TH-message[^>]*>.*?</iframe>', '', text, flags=re.DOTALL)
+    # 清理srcdoc编码破坏后残留的iframe属性碎片
+    text = re.sub(r'"\s+class="w-full"[^>]*></iframe>', '', text)
     # 清理因移除上述内容产生的连续空行
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()

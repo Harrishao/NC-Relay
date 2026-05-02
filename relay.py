@@ -13,6 +13,7 @@ RENDER_ENABLE = _config.getboolean("render", "enable", fallback=False)
 RENDER_IMAGE_THRESHOLD = _config.getint("render", "image_threshold", fallback=500)
 RENDER_INCLUDE_REASONING = _config.getboolean("render", "include_reasoning", fallback=True)
 RENDER_IMAGE_WIDTH = _config.getint("render", "image_width", fallback=600)
+RENDER_INCLUDE_HTML_BLOCKS = _config.getboolean("render", "include_html_blocks", fallback=True)
 RENDER_OUTPUT_DIR = os.path.join(BASE_DIR, "rendered")
 
 _last_server_reasoning = None
@@ -155,6 +156,11 @@ async def send_to_qq(relay_id, content, reasoning_content=None, rendered_html=No
     napcat_ws = info["napcat_ws"]
     group_id = info.get("group_id")
     user_id = info["user_id"]
+
+    if not RENDER_INCLUDE_HTML_BLOCKS:
+        # 关闭HTML块渲染：剥离```html代码块，强制走纯文本路径
+        content = render.strip_html_code_blocks(content)
+        rendered_html = None
 
     if RENDER_ENABLE:
         if RENDER_INCLUDE_REASONING and reasoning_content:

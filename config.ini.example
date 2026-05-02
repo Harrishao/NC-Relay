@@ -16,5 +16,6 @@ admin_mode = false
 [render]
 enable = true
 image_threshold = 0
+include_html_blocks = true
 include_reasoning = false
 image_width = 600
