@@ -175,7 +175,7 @@ async def wait_for_response(relay_id: str, timeout: float = 120.0) -> dict | Non
 
 
 async def capture_screenshot(output_dir: str = None) -> str | None:
-    """截取最后一条消息容器的截图，包含插件渲染内容"""
+    """截取最后一条消息容器的截图，包含插件渲染内容，支持溢出内容完整截取"""
     if output_dir is None:
         output_dir = RENDER_OUTPUT_DIR
 
@@ -187,16 +187,78 @@ async def capture_screenshot(output_dir: str = None) -> str | None:
         # 优先截取完整消息容器(.mes)，比.mes_text包含更多渲染内容
         el = _page.locator(".mes").last
         await el.wait_for(state="visible", timeout=5000)
-        await el.screenshot(path=output_path, type="png")
-        print(f"[headless] 消息容器截图已保存: {output_path}")
-        return output_path
+        
+        # 获取元素 bounding box 并调整视口以完整显示
+        box = await el.bounding_box()
+        if box:
+            # 获取当前页面视口
+            viewport = _page.viewport_size
+            original_height = viewport["height"]
+            original_width = viewport["width"]
+            
+            # 计算需要的高度（元素高度 + 额外空间）
+            needed_height = int(box["height"] + 200)
+            if needed_height > original_height:
+                try:
+                    # 临时调整视口以容纳完整内容
+                    await _page.set_viewport_size({"width": original_width, "height": needed_height})
+                    await _page.wait_for_timeout(300)
+                except Exception:
+                    pass
+            
+            try:
+                # 滚动到元素顶部
+                await el.scroll_into_view_if_needed()
+                await _page.wait_for_timeout(200)
+            except Exception:
+                pass
+            
+            # 使用元素截图并启用 full_page 模式
+            await el.screenshot(path=output_path, type="png")
+            print(f"[headless] 消息容器截图已保存: {output_path} (元素高度: {box['height']})")
+            
+            # 恢复原视口大小
+            try:
+                await _page.set_viewport_size({"width": original_width, "height": original_height})
+            except Exception:
+                pass
+            
+            return output_path
+        else:
+            # 无法获取 bounding box，使用普通截图
+            await el.screenshot(path=output_path, type="png")
+            print(f"[headless] 消息容器截图已保存: {output_path}")
+            return output_path
+            
     except Exception as e:
         print(f"[headless] 消息容器截图失败({e})，尝试.mes_text")
         try:
             el = _page.locator(".mes_text").last
             await el.wait_for(state="visible", timeout=5000)
+            
+            # 同样处理 .mes_text 元素
+            box = await el.bounding_box()
+            if box:
+                viewport = _page.viewport_size
+                original_height = viewport["height"]
+                original_width = viewport["width"]
+                needed_height = int(box["height"] + 200)
+                if needed_height > original_height:
+                    await _page.set_viewport_size({"width": original_width, "height": needed_height})
+                    await _page.wait_for_timeout(300)
+                await el.scroll_into_view_if_needed()
+                await _page.wait_for_timeout(200)
+            
             await el.screenshot(path=output_path, type="png")
             print(f"[headless] 消息文本截图已保存: {output_path}")
+            
+            # 恢复视口
+            try:
+                viewport = _page.viewport_size
+                await _page.set_viewport_size({"width": viewport["width"], "height": 800})
+            except Exception:
+                pass
+            
             return output_path
         except Exception as e2:
             print(f"[headless] 元素截图均失败({e2})，回退全页截图")
@@ -369,6 +431,72 @@ async def fetch_character_chats(avatar_url: str) -> list:
     except Exception as e:
         print(f"[headless] 获取角色聊天记录失败: {e}")
         return []
+
+
+async def delete_messages(n: int = 1) -> bool:
+    """通过STscript删除当前聊天最后N条消息(仅支持1或2)"""
+    if n not in (1, 2):
+        n = 1
+    try:
+        await _page.evaluate(
+            """async (n) => {
+                const ctx = window.SillyTavern.getContext();
+                await ctx.executeSlashCommands(`/del ${n}`);
+            }""",
+            n,
+        )
+        await _page.wait_for_timeout(500)
+        print(f"[headless] 已删除最后 {n} 条消息")
+        return True
+    except Exception as e:
+        print(f"[headless] 删除消息失败: {e}")
+        return False
+
+
+async def delete_chat(file_name: str) -> bool:
+    """通过API删除指定聊天文件"""
+    try:
+        clean_file = file_name.replace(".jsonl", "")
+        await _page.evaluate(
+            """async (file_name) => {
+                const ctx = window.SillyTavern.getContext();
+                const headers = ctx.getRequestHeaders();
+
+                // 从文件名提取角色名
+                const dashIdx = file_name.lastIndexOf(' - ');
+                if (dashIdx < 0) throw new Error('Invalid file name');
+                const charName = file_name.substring(0, dashIdx);
+
+                // 查找角色avatar
+                let avatar = '';
+                for (let i = 0; i < ctx.characters.length; i++) {
+                    if (ctx.characters[i] && ctx.characters[i].name === charName) {
+                        avatar = ctx.characters[i].avatar;
+                        break;
+                    }
+                }
+
+                // 调用删除API
+                const resp = await fetch('/api/chats/delete', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({
+                        ch_name: charName,
+                        file_name: file_name,
+                        avatar_url: avatar,
+                    }),
+                });
+                if (!resp.ok) throw new Error('Delete failed: ' + resp.status);
+                return true;
+            }""",
+            clean_file,
+        )
+        await _page.wait_for_timeout(500)
+        print(f"[headless] 已删除聊天: {clean_file}")
+        return True
+    except Exception as e:
+        print(f"[headless] 删除聊天失败: {e}")
+        return False
 
 
 async def cancel_processing():

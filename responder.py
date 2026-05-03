@@ -21,7 +21,9 @@ _CMDS = {
     "/ss":         "_cmd_ss",
     "/rf":         "_cmd_rf",
     "/chat":       "_cmd_chat",
+    "/msg":        "_cmd_chat",
     "/char":       "_cmd_char",
+    "/del":        "_cmd_del",
     "/admin":      "_cmd_admin",
     "/admin.add":  "_cmd_admin_add",
     "/admin.del":  "_cmd_admin_del",
@@ -175,6 +177,40 @@ async def _cmd_lastmsg(websocket, data, args):
         print(f"[responder] 最后消息截图已发送, user_id={user_id}")
     else:
         await _reply(websocket, data, "截图失败，请稍后重试...")
+
+
+async def _cmd_del(websocket, data, args):
+    user_id = str(data.get("user_id", ""))
+
+    if not admin.is_whitelisted(user_id):
+        await _reply(websocket, data, "管理员模式已开启，可是你不在白名单哦...")
+        return
+
+    msg_type = data.get("message_type")
+    if msg_type not in ("private", "group"):
+        return
+
+    group_id = data.get("group_id")
+
+    n = 1
+    if args.strip() in ("1", "2"):
+        n = int(args.strip())
+
+    ok = await headless_st.delete_messages(n)
+    if not ok:
+        await _reply(websocket, data, "删除消息失败。")
+        return
+
+    await asyncio.sleep(1)
+    img = await headless_st.capture_screenshot()
+    if img:
+        if group_id:
+            await echo.echo_group_image(websocket, group_id, img)
+        else:
+            await echo.echo_private_image(websocket, user_id, img)
+        print(f"[responder] 删除确认截图已发送, user_id={user_id}")
+    else:
+        await _reply(websocket, data, f"已删除 {n} 条消息。")
 
 
 async def _cmd_ss(websocket, data, args):
@@ -375,6 +411,7 @@ _CMD_HANDLERS = {
     "_cmd_rf":        _cmd_rf,
     "_cmd_chat":      _cmd_chat,
     "_cmd_char":      _cmd_char,
+    "_cmd_del":       _cmd_del,
     "_cmd_admin":     _cmd_admin,
     "_cmd_admin_add": _cmd_admin_add,
     "_cmd_admin_del": _cmd_admin_del,
@@ -386,6 +423,58 @@ async def _handle_pending(websocket, data, pending, raw_text):
     action = pending["action"]
     p_data = pending["data"]
     group_id = pending["group_id"]
+
+    # 特殊处理确认状态
+    if action == "chat_delete_confirm":
+        if raw_text.strip().lower() == "y":
+            file_name = p_data["file_name"]
+            ok = await headless_st.delete_chat(file_name)
+            if not ok:
+                await _reply(websocket, data, "删除聊天失败。")
+            else:
+                # 删除后返回更新后的聊天列表
+                chats = await headless_st.fetch_recent_chats()
+                if chats:
+                    lines = [f"# 最近聊天 ({len(chats)}条) - 已删除", ""]
+                    for i, c in enumerate(chats):
+                        ch_name = c.get("file_name", "?").replace(".jsonl", "")
+                        items = c.get("chat_items", 0)
+                        size = c.get("file_size", "?")
+                        lines.append(f"**{i}** — {ch_name}")
+                        lines.append(f"> 消息: {items} | 大小: {size}")
+                        lines.append("")
+                    md = "\n".join(lines)
+                    img = await render.render_to_image(md, headless_st.RENDER_OUTPUT_DIR)
+                    if img:
+                        if group_id:
+                            await echo.echo_group_image(websocket, group_id, img)
+                        else:
+                            await echo.echo_private_image(websocket, str(data.get("user_id", "")), img)
+                    _set_pending(str(data.get("user_id", "")), "chat_pick", chats, websocket, group_id)
+                else:
+                    await _reply(websocket, data, "已删除，但获取聊天列表失败。")
+                    _clear_pending(str(data.get("user_id", "")))
+        else:
+            await _reply(websocket, data, "已取消删除，返回待命状态。")
+        _clear_pending(str(data.get("user_id", "")))
+        return
+
+    # chat_pick 状态下 del <数字> → 删除整个聊天
+    if action == "chat_pick":
+        m = re.match(r'^del\s+(\d+)$', raw_text.strip(), re.IGNORECASE)
+        if m:
+            index = int(m.group(1))
+            chats = p_data
+            if index < 0 or index >= len(chats):
+                await _reply(websocket, data, "序号超出范围，已返回待命状态。")
+                _clear_pending(str(data.get("user_id", "")))
+                return
+            chat = chats[index]
+            ch_name = chat.get("file_name", "?").replace(".jsonl", "")
+            await _reply(websocket, data, f"确认删除 {ch_name} ? 回复 y 确认，其他键取消。(15秒)")
+            _set_pending(str(data.get("user_id", "")), "chat_delete_confirm",
+                         {"file_name": chat.get("file_name", "")}, websocket, group_id)
+            return
 
     # 解析数字
     try:
@@ -532,15 +621,34 @@ async def handle_message(websocket, data):
     # 检查pending状态
     pending = _get_pending(user_id)
     if pending:
-        # 如果有pending且输入是数字，走pending处理
-        if raw_text.strip().isdigit():
-            await _handle_pending(websocket, data, pending, raw_text)
+        raw = raw_text.strip()
+
+        # 确认状态：处理 y/n
+        if pending["action"] == "chat_delete_confirm":
+            if raw.lower() == "y":
+                await _handle_pending(websocket, data, pending, "y")
+            else:
+                await _reply(websocket, data, "已取消删除，返回待命状态。")
+                _clear_pending(user_id)
             return
-        # 如果输入是新命令，清除pending走正常流程
-        if raw_text.strip().startswith("/"):
+
+        # chat_pick状态下del <数字> → 删除整个聊天
+        if pending["action"] == "chat_pick":
+            m = re.match(r'^del\s+(\d+)$', raw, re.IGNORECASE)
+            if m:
+                await _handle_pending(websocket, data, pending, raw)
+                return
+
+        # 数字 → 选择逻辑
+        if raw.isdigit():
+            await _handle_pending(websocket, data, pending, raw)
+            return
+
+        # 新命令 → 清除pending走正常流程
+        if raw.startswith("/"):
             _clear_pending(user_id)
         else:
-            # 非数字非命令 → 类型错误
+            # 类型错误
             await _reply(websocket, data, "类型错误，请输入数字序号。已返回待命状态。")
             _clear_pending(user_id)
             return
