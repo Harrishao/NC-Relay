@@ -1,92 +1,67 @@
 # NC-Relay2ST
 
-NapCat ↔ SillyTavern 双向消息桥接服务 — 通过 NapCat 接收 QQ 消息，注入酒馆输入框触发 LLM 对话，并将回复实时回传 QQ。
+NapCat ↔ SillyTavern 双向消息桥接服务 — 通过 NapCat 接收 QQ 消息，以 Playwright 无头浏览器直接操作 SillyTavern 页面触发 LLM 对话，并将 AI 回复以截图形式实时回传 QQ。
 
-理论上其他支持 OneBot 协议的框架也都可以使用
+理论上其他支持 OneBot v11 协议的框架也可使用。
 
-### 目前的情况
+## 消息流程
 
-- 能还原需要渲染的块，但是没做到读取数据，而且原内容包含图片时渲染会出错
-
-### 在考虑什么？
-
-- 干脆酒馆和程序连接的方式推倒重做算了，把酒馆装进无头浏览器里直接截屏
-
-
-## 消息流程详解
-
-### NapCat → ST
-
-1. 用户在 QQ 发送 `/st 你好`
-2. NapCat 通过反向 WebSocket 推送到 NC-Relay2ST
-3. NC-Relay2ST 接收到消息后转发至酒馆助手脚本`sillytavern-nc-relay.js`
-4. 脚本通过反向 WebSocket 从 NC-Relay2ST 接收消息，填入酒馆输入框，模拟点击发送按钮
-5. NC-Relay2ST 捕获从酒馆发出的消息，转发至配置好的LLM API
-
-### LLM → NapCat
-
-1. 流式响应通过 SSE 逐 chunk 返回给酒馆（酒馆界面内实时显示），同时消息被填入缓存区
-2. 完整响应收集完毕后，NC-Relay2ST 拼接消息，形成完整的正文，并发往 NapCat
-3. QQ 用户收到完整正文
-
-## 文转图功能
-
-相关设置在`config.ini`中调整
-
-- 设有总开关
-- 文转图可还原浏览器渲染的前端，虽然不能互动
-- 可设置超过指定长度的文本转图片发送（设为 -1 则始终发送纯文本），发送纯文本则不附带需渲染的代码块
-- 可设置是否包含需要渲染的代码块
-- 设有思维链返回开关，思维链始终以图片返回
+```
+[QQ 用户] --发送 /st <消息>--> [NapCat]
+     --> 反向 WebSocket --> [NC-Relay2ST :6199]
+     --> Playwright 在无头浏览器中操作 SillyTavern 页面
+         1. 将消息填入 #send_textarea 输入框
+         2. 模拟点击 #send_but 发送按钮
+         3. 轮询等待 LLM 生成完成（#send_but 重新出现）
+         4. 从 JS 上下文读取最后一条 assistant 消息
+         5. 截取 .mes 消息容器截图
+     --> WebSocket 回传截图 --> [NapCat]
+[QQ 用户] <-- 收到 AI 回复截图 <--
+```
 
 ## 快速开始
 
 ### 1. 环境要求
 
 - Python 3.8+
-- NapCat 或其他支持 OneBot 协议的框架
-- SillyTavern 和酒馆助手扩展
+- NapCat 或其他支持 OneBot v11 协议的框架（仅需反向 WebSocket）
+- SillyTavern（本地运行，无头浏览器直接操作其 Web 页面）
+- Playwright Chromium 浏览器
 
 ### 2. 安装依赖
 
 ```bash
 pip install -r requirements.txt
+playwright install chromium
 ```
 
-### 3. 配置 NapCat 和酒馆助手脚本
+### 3. 配置 NapCat
 
-- 在 NapCat 建立一个 WebSocket 客户端，地址填`127.0.0.1:6199`，token留空
-- 在酒馆助手内导入脚本`nc-relay-st-extension.json`
-- 在酒馆中 API 连接配置选 OpenAI 兼容端口，基础 URL 填`http://127.0.0.1:6200`（注意不是https）
+在 NapCat 中建立一个**反向 WebSocket 客户端**：
+- 地址填 `ws://127.0.0.1:6199`
+- Token 留空
 
-#### 3.1 **注意：由于`.json`文件中的端口号是硬写入的，而非从`config.ini`读取，若想自定义端口号，记得连带修改`nc-relay-st-extension.json`中的端口号**
+无需在酒馆端安装任何扩展脚本。
 
-### 4. 配置`config.ini`
-
-`config.ini`中的各项说明:
+### 4. 配置 `config.ini`
 
 ```ini
 [server]
-port = 6199            # 你在 NapCat 建立的 WebSocket 客户端端口号
-debug = false          # 没用，但可能以后有用，总之别动它
-
-[http]
-port = 6200            # 你在酒馆填的端口号
-
-[llm]
-base_url = Chovy       # 你的 API base_url，API KEY 由程序从酒馆获取
-timeout = 120          # LLM 请求超时 (秒)，不用动它
+port = 6199              # NapCat WebSocket 客户端连接的端口
+debug = false
 
 [admin]
-admins = 8884844,<账号2>,<账号3>     # 账号间用英文半角逗号分隔
-admin_mode = false     # 启动时管理员模式的默认开关
+admins = <QQ号>          # 一级管理员QQ号，多个用英文半角逗号分隔
+admin_mode = false       # 启动时管理员模式的默认开关
 
-[render]
-enable = true          # 文转图总开关
-image_threshold = 0    # 超过该长度的文本转为图片发送，设为 -1 则始终发送纯文本
-include_html_blocks = false  # 包含html块开关，开启后会连带需要渲染的代码块一起返回
-include_reasoning = false    # 返回思维链开关，思维链始终以图片返回
-image_width = 600      # 图片宽度
+[headless]
+st_url = http://127.0.0.1:8000  # SillyTavern 页面地址
+headless = true                  # 是否使用无头模式
+viewport_width = 600             # 浏览器视口宽度
+
+[timing]
+refresh_delay = 3         # 页面刷新后等待时间（秒）
+chat_switch_delay = 2     # 切换聊天后等待时间（秒）
 ```
 
 ### 5. 启动
@@ -95,49 +70,57 @@ image_width = 600      # 图片宽度
 python main.py
 ```
 
-输出示例：
-```
-[启动] HTTP 代理服务监听在 http://0.0.0.0:6200
-[启动] WebSocket 服务监听在 ws://0.0.0.0:6199  (debug=True)
-```
+启动后会自动打开浏览器连接 SillyTavern，并启动 WebSocket 服务等待 NapCat 连接。
 
 ## 命令指南
 
-### 基本操作
+### AI 对话
 
-- `/st <message>`将消息注入酒馆输入框并模拟点击发送
-- `/stop`中止目前的生成命令，酒馆模拟点击停止
+| 命令 | 说明 |
+|------|------|
+| `/st <消息>` | 将消息注入 ST 输入框，触发 LLM 对话，返回 AI 回复截图 |
+| `/stop` | 中止正在进行的 LLM 生成 |
 
+### 聊天/角色管理
+
+| 命令 | 说明 |
+|------|------|
+| `/chat` | 获取最近聊天列表，可交互选择切换聊天 |
+| `/char` | 获取角色卡列表，可交互选择角色和聊天 |
+| `/del [1\|2]` | 删除当前聊天最后 1 或 2 条消息 |
+
+### 截图
+
+| 命令 | 说明 |
+|------|------|
+| `/lastmsg` | 获取最后一条消息的截图 |
+| `/ss` | 获取 ST 全页截图 |
+| `/rf` | 刷新 ST 页面 |
 
 ### 权限管理
 
-程序设两级管理员，一级管理员账号在`config.ini`中配置，只能从本地修改；  
-二级管理员账号在`admin_whitelist.json`中配置，可通过`/admin.add|del <账号>`增删
+程序设两级管理员：
 
-- `/admin`管理员模式总开关，开启后仅响应白名单成员消息
+- **L1（一级管理员）**：在 `config.ini` 中配置，只能从本地修改
+- **L2（二级管理员/白名单）**：存储在 `admin_whitelist.json` 中，可通过命令动态管理
+
+| 命令 | 说明 |
+|------|------|
+| `/admin` | 管理员模式总开关，开启后仅响应白名单成员消息 |
+| `/admin.add <QQ号>` | 添加二级管理员 |
+| `/admin.del <QQ号>` | 删除二级管理员 |
 
 ## 调试
 
 ### 控制台日志
 
-NC-Relay2ST 在控制台输出详细日志，前缀标识来源：
-- `[NapCat]` — NapCat 连接事件
-- `[收到消息]` — 原始 QQ 消息 JSON
-- `[relay]` — 消息桥接（推送/回传）
-- `[responder]` — 消息过滤分发
-- `[echo]` — QQ 消息发送 payload
-- `[server]` — HTTP 请求处理
+日志前缀标识来源：
+- `[NapCat]` — NapCat 连接/断开事件
+- `[收到消息]` — 原始 QQ 消息
+- `[responder]` — 消息过滤与命令分发
+- `[headless]` — 无头浏览器操作
+- `[echo]` — QQ 消息发送
 
 ### 请求/响应快照
 
-NC-Relay2ST 将最近一次请求和 LLM 响应分别保存到 `message.json` 和 `response.json`，便于调试。
-
-### 浏览器控制台
-
-酒馆扩展脚本在浏览器 F12 控制台输出 `[NC-Relay]` 前缀日志，包含轮询状态、消息检测、回传确认等信息。
-
-### 还打算加入的功能
-
-- STscript 走不通，准备通过模拟 DOM 点击来实现酒馆界面交互
-- 使传回的图片能正常渲染前端 (虽然只是图片不能交互)
-- 写一个`/help` list
+最近一次 LLM 请求和响应分别保存到 `message.json` 和 `response.json`。

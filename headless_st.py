@@ -1,7 +1,6 @@
 """
-无头浏览器直连SillyTavern模块
-替代 relay.py + render.py + sillytavern-nc-relay.js
-通过 Playwright 直接在无头 Chromium 中操作 ST 并截屏
+无头浏览器直连 SillyTavern 模块
+通过 Playwright 在无头 Chromium 中操作 ST 页面、注入消息、捕获回复并截屏
 """
 
 import os

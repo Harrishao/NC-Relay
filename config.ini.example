@@ -1,21 +1,16 @@
 [server]
-port = 6199
-debug = false
-
-[http]
-port = 6200
-
-[llm]
-base_url =
-timeout = 120
+port = 6199              # NapCat WebSocket 客户端连接的端口
+debug = false            # 不用管这个，保持 false 就对了
 
 [admin]
-admins =
-admin_mode = false
+admins =                  # 一级管理员QQ号，用英文半角逗号分隔
+admin_mode = false        # 启动时管理员模式的默认开关
 
-[render]
-enable = true
-image_threshold = 0
-include_html_blocks = true
-include_reasoning = false
-image_width = 600
+[headless]
+st_url = http://127.0.0.1:8000  # SillyTavern 页面地址
+headless = true                  # 是否使用无头模式（false 会显示浏览器窗口方便调试）
+viewport_width = 600             # 浏览器视口宽度
+
+[timing]
+refresh_delay = 3         # 页面刷新后等待时间（秒）
+chat_switch_delay = 2     # 切换聊天后等待时间（秒）
