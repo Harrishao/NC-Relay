@@ -1,6 +1,5 @@
 import os
 import re
-import uuid
 import atexit
 import markdown
 from playwright.async_api import async_playwright
@@ -12,11 +11,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PAGES_DIR = os.path.join(BASE_DIR, "pages")
 
 
-def _save_page(html: str, image_filename: str) -> None:
-    """保存渲染后的完整HTML页面到pages目录，便于排查渲染问题"""
+def _save_page(html: str) -> None:
+    """保存渲染后的HTML页面到pages目录，仅保留最新一次"""
     os.makedirs(PAGES_DIR, exist_ok=True)
-    base = os.path.splitext(image_filename)[0]
-    page_path = os.path.join(PAGES_DIR, f"{base}.html")
+    page_path = os.path.join(PAGES_DIR, "nc_render.html")
     with open(page_path, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"[render] 页面已保存: {page_path}")
@@ -194,10 +192,10 @@ async def render_to_image(markdown_text: str, output_dir: str, width: int = 600)
     html_body = _markdown_to_html(cleaned)
     html = HTML_TEMPLATE.format(width=width, body=html_body)
 
-    filename = f"nc_{uuid.uuid4().hex[:10]}.png"
+    filename = "nc_render.png"
     output_path = os.path.join(output_dir, filename)
 
-    tmp_html = os.path.join(output_dir, f"_tmp_{uuid.uuid4().hex[:6]}.html")
+    tmp_html = os.path.join(output_dir, "_tmp_render.html")
     with open(tmp_html, "w", encoding="utf-8") as f:
         f.write(html)
 
@@ -207,7 +205,7 @@ async def render_to_image(markdown_text: str, output_dir: str, width: int = 600)
         await page.goto(f"file:///{tmp_html.replace(os.sep, '/')}", wait_until="networkidle")
         await page.screenshot(path=output_path, full_page=True)
         await page.close()
-        _save_page(html, filename)
+        _save_page(html)
         print(f"[render] 图片已保存: {output_path}")
         return output_path
     except Exception as e:

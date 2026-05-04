@@ -5,7 +5,6 @@
 
 import os
 import re
-import uuid
 import asyncio
 import atexit
 import configparser
@@ -221,7 +220,7 @@ async def capture_screenshot(output_dir: str = None) -> str | None:
         output_dir = RENDER_OUTPUT_DIR
 
     os.makedirs(output_dir, exist_ok=True)
-    filename = f"nc_{uuid.uuid4().hex[:10]}.png"
+    filename = "nc_msg.png"
     output_path = os.path.join(output_dir, filename)
 
     await dismiss_toasts()
@@ -320,7 +319,7 @@ async def capture_full_screenshot(output_dir: str = None) -> str | None:
         output_dir = RENDER_OUTPUT_DIR
 
     os.makedirs(output_dir, exist_ok=True)
-    filename = f"nc_{uuid.uuid4().hex[:10]}.png"
+    filename = "nc_full.png"
     output_path = os.path.join(output_dir, filename)
 
     await dismiss_toasts()
