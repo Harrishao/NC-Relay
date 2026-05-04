@@ -825,12 +825,9 @@ async def _handle_pending(websocket, data, pending, raw_text):
         _clear_pending(str(data.get("user_id", "")))
 
 
-async def handle_message(websocket, data):
-    if data.get("post_type") != "message":
-        return
-
+async def _process_single(websocket, data, raw_text):
+    """处理单条命令，返回 True 表示成功，False 表示不应继续链条"""
     user_id = str(data.get("user_id", ""))
-    raw_text = _extract_text(data.get("message", ""))
 
     # 检查pending状态
     pending = _get_pending(user_id)
@@ -844,19 +841,19 @@ async def handle_message(websocket, data):
             else:
                 await _reply(websocket, data, "已取消删除，返回待命状态。")
                 _clear_pending(user_id)
-            return
+            return True
 
         # chat_pick状态下del <数字> → 删除整个聊天
         if pending["action"] == "chat_pick":
             m = re.match(r'^del\s+(\d+)$', raw, re.IGNORECASE)
             if m:
                 await _handle_pending(websocket, data, pending, raw)
-                return
+                return True
 
         # 数字 → 选择逻辑
         if raw.isdigit():
             await _handle_pending(websocket, data, pending, raw)
-            return
+            return True
 
         # 新命令 → 清除pending走正常流程
         if raw.startswith("/"):
@@ -865,11 +862,35 @@ async def handle_message(websocket, data):
             # 类型错误
             await _reply(websocket, data, "类型错误，请输入数字序号。已返回待命状态。")
             _clear_pending(user_id)
-            return
+            return True
 
-    cmd_func_name, args = _parse_command(data.get("message", ""))
+    cmd_func_name, args = _parse_command(raw_text)
     if cmd_func_name is None:
-        return
+        return True
 
     handler = _CMD_HANDLERS[cmd_func_name]
     await handler(websocket, data, args)
+    return True
+
+
+async def handle_message(websocket, data):
+    if data.get("post_type") != "message":
+        return
+
+    raw_text = _extract_text(data.get("message", ""))
+
+    # 生成进行中时仅允许 /stop，其余指令静默忽略
+    if headless_st.is_locked():
+        if not raw_text.strip().startswith("/stop"):
+            return
+        # /stop 透传，不检查其他
+
+    # 按 "|" 拆分连续指令
+    parts = [p.strip() for p in raw_text.split("|") if p.strip()]
+    if not parts:
+        return
+
+    for part in parts:
+        single_data = dict(data)
+        single_data["message"] = part
+        await _process_single(websocket, single_data, part)

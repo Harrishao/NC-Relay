@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sys
 import configparser
 import websockets
 
@@ -28,7 +29,7 @@ async def handle_napcat(websocket, debug):
                 continue
             if debug:
                 print(f"[收到消息] {json.dumps(data, indent=2, ensure_ascii=False)}")
-            await responder.handle_message(websocket, data)
+            asyncio.create_task(responder.handle_message(websocket, data))
     except websockets.exceptions.ConnectionClosed as e:
         print(f"[NapCat] 断开: {e}")
 
@@ -38,6 +39,10 @@ async def main():
     admin.init()
     port = config["port"]
     debug = config["debug"]
+
+    # 行缓冲确保日志及时输出
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
 
     # 启动无头浏览器
     await headless_st.init_browser()

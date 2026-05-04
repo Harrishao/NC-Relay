@@ -45,6 +45,10 @@ def release_lock():
     _processing_relay_id = None
 
 
+def is_locked():
+    return _processing_lock
+
+
 async def init_browser():
     global _playwright, _browser, _page
     _playwright = await async_playwright().start()
@@ -220,7 +224,7 @@ async def regenerate() -> bool:
         await _page.evaluate(
             "() => window.SillyTavern.getContext().generate('regenerate')"
         )
-        print("[headless] 已触发重新生成")
+        print("[headless] 已触发重新生成", flush=True)
         return True
     except Exception as e:
         print(f"[headless] 重新生成失败: {e}")
