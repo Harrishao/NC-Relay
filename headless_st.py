@@ -125,10 +125,10 @@ async def inject_message(text: str, relay_id: str) -> bool:
             clean,
         )
         await _page.click("#send_but")
-        print(f"[headless] 消息已注入, relay_id={relay_id}: {clean[:50]}...")
+        print(f"[headless] 消息已注入, relay_id={relay_id}: {clean[:50]}...", flush=True)
         return True
     except Exception as e:
-        print(f"[headless] 消息注入失败: {e}")
+        print(f"[headless] 消息注入失败: {e}", flush=True)
         return False
 
 
@@ -139,17 +139,17 @@ async def wait_for_response(relay_id: str, timeout: float = 120.0) -> dict | Non
     try:
         # 等待生成开始（停止按钮可见）
         await _page.wait_for_selector("#mes_stop", state="visible", timeout=10000)
-        print(f"[headless] 检测到生成开始 (stop按钮可见), relay_id={relay_id}")
+        print(f"[headless] 检测到生成开始 (stop按钮可见), relay_id={relay_id}", flush=True)
     except Exception:
         # 可能瞬间就生成完了，或者按钮状态异常
-        print(f"[headless] 未检测到stop按钮, relay_id={relay_id}")
+        print(f"[headless] 未检测到stop按钮, relay_id={relay_id}", flush=True)
 
     try:
         # 等待生成结束（发送按钮重新可见）
         await _page.wait_for_selector("#send_but", state="visible", timeout=timeout_ms)
-        print(f"[headless] 检测到生成完成 (send按钮可见), relay_id={relay_id}")
+        print(f"[headless] 检测到生成完成 (send按钮可见), relay_id={relay_id}", flush=True)
     except Exception:
-        print(f"[headless] 等待send按钮超时, relay_id={relay_id}")
+        print(f"[headless] 等待send按钮超时, relay_id={relay_id}", flush=True)
         return None
 
     # 读取最后一条assistant消息
@@ -175,7 +175,8 @@ async def wait_for_response(relay_id: str, timeout: float = 120.0) -> dict | Non
     if result:
         print(
             f"[headless] 回复已捕获, relay_id={relay_id}, "
-            f"len={len(result['content'])}, reasoning_len={len(result.get('reasoning', ''))}"
+            f"len={len(result['content'])}, reasoning_len={len(result.get('reasoning', ''))}",
+            flush=True
         )
     return result
 

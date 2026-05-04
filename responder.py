@@ -298,6 +298,8 @@ async def _cmd_regenerate(websocket, data, args):
     group_id = data.get("group_id")
     relay_id = str(uuid.uuid4())[:8]
 
+    print(f"[responder] 收到重新生成指令, user_id={user_id}, relay_id={relay_id}", flush=True)
+
     if not headless_st.acquire_lock(relay_id):
         await _reply(websocket, data, "有处理中的消息，等一会吧...或者使用/stop 中止？")
         return
@@ -319,7 +321,7 @@ async def _cmd_regenerate(websocket, data, args):
                 await echo.echo_group_image(websocket, group_id, img)
             else:
                 await echo.echo_private_image(websocket, user_id, img)
-            print(f"[responder] 重新生成截图已发送, user_id={user_id}")
+            print(f"[responder] 重新生成截图已发送, user_id={user_id}", flush=True)
         else:
             await _reply(websocket, data, "截图失败，请稍后重试...")
     finally:
