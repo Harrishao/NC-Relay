@@ -1,5 +1,6 @@
 import asyncio
 import configparser
+import datetime
 import os
 import re
 import time
@@ -351,7 +352,6 @@ async def _cmd_char(websocket, data, args):
             last_str = "从未"
         else:
             try:
-                import datetime
                 dt = datetime.datetime.fromtimestamp(last / 1000)
                 last_str = dt.strftime("%m/%d %H:%M")
             except Exception:

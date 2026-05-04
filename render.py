@@ -1,7 +1,6 @@
 import os
 import re
 import uuid
-import html as _html_mod
 import atexit
 import markdown
 from playwright.async_api import async_playwright
@@ -89,49 +88,6 @@ strong {{ font-weight: 600; }}
 </body>
 </html>"""
 
-REASONING_TEMPLATE = """<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<style>
-* {{ box-sizing: border-box; margin: 0; padding: 0; }}
-body {{
-    width: {width}px;
-    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
-    font-size: 14px;
-    line-height: 1.7;
-    color: #666;
-    background: #fafaf5;
-    padding: 20px 18px;
-    word-break: break-word;
-}}
-.thinking-label {{
-    display: inline-block;
-    background: #e8e0d0;
-    color: #8b7355;
-    font-size: 12px;
-    padding: 2px 10px;
-    border-radius: 10px;
-    margin-bottom: 10px;
-}}
-</style>
-</head>
-<body>
-<div class="thinking-label">思考过程</div>
-<div>{body}</div>
-</body>
-</html>"""
-
-
-def strip_code_blocks(text: str) -> str:
-    return re.sub(r'```[^\n]*\n.*?```', '', text, flags=re.DOTALL).strip()
-
-
-def strip_html_code_blocks(text: str) -> str:
-    """仅移除```html代码块，保留其他内容"""
-    return re.sub(r'```html\s*\n.*?```', '', text, flags=re.DOTALL).strip()
-
-
 def _clean_message(text: str) -> str:
     """清洗CQ码和XML标签残留"""
     text = re.sub(r'\[CQ:[^\]]*\]', '', text)
@@ -180,46 +136,6 @@ def _sanitize_html_block(html_block: str) -> str:
             inner = style_block + '\n' + inner
 
     return inner
-
-
-def _unwrap_html_code_blocks(html_content: str) -> str:
-    """将ST渲染后的语法高亮HTML代码块还原为可渲染的HTML组件"""
-    def _extract(m):
-        inner = m.group(1)
-        # 剥离highlight.js的语法高亮span标签
-        inner = re.sub(r'<span[^>]*>', '', inner)
-        inner = inner.replace('</span>', '')
-        # 剥离其他可能嵌套的标签（如code内的b/i等）
-        inner = re.sub(r'</?(?:b|i|em|strong|u|mark)[^>]*>', '', inner)
-        # 解码HTML实体
-        inner = _html_mod.unescape(inner)
-        inner = _sanitize_html_block(inner)
-        return f'<div class="rendered-html">{inner}</div>'
-
-    # 匹配 <code class="...custom-html...">...</code>
-    return re.sub(
-        r'<code[^>]*custom-html[^>]*>(.*?)</code>',
-        _extract,
-        html_content,
-        flags=re.DOTALL
-    )
-
-
-def _strip_encoded_html(text: str) -> str:
-    """移除实体编码的HTML文档片段（插件iframe srcdoc残留的编码源码）"""
-    # 匹配 &lt;body&gt;...&lt;/body&gt; 编码块
-    text = re.sub(r'&lt;body&gt;.*?&lt;/body&gt;', '', text, flags=re.DOTALL)
-    # 清理残留的编码文档级标签
-    for tag in ['&lt;!DOCTYPE[^&]*&gt;', '&lt;html[^&]*&gt;', '&lt;/html&gt;',
-                '&lt;head&gt;', '&lt;/head&gt;', '&lt;/script&gt;']:
-        text = re.sub(r'\s*' + tag, '', text, flags=re.DOTALL)
-    # 移除TH-message插件iframe（srcdoc内容无法在file://下渲染，留下空白）
-    text = re.sub(r'<iframe[^>]*TH-message[^>]*>.*?</iframe>', '', text, flags=re.DOTALL)
-    # 清理srcdoc编码破坏后残留的iframe属性碎片
-    text = re.sub(r'"\s+class="w-full"[^>]*></iframe>', '', text)
-    # 清理因移除上述内容产生的连续空行
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    return text.strip()
 
 
 def _markdown_to_html(text: str) -> str:
@@ -304,81 +220,3 @@ async def render_to_image(markdown_text: str, output_dir: str, width: int = 600)
             pass
 
 
-async def render_reasoning_to_image(reasoning_text: str, output_dir: str, width: int = 600) -> str | None:
-    if not reasoning_text or not reasoning_text.strip():
-        return None
-
-    os.makedirs(output_dir, exist_ok=True)
-
-    escaped = (
-        reasoning_text
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace("\n", "<br>")
-    )
-    html = REASONING_TEMPLATE.format(width=width, body=escaped)
-
-    filename = f"nc_reasoning_{uuid.uuid4().hex[:10]}.png"
-    output_path = os.path.join(output_dir, filename)
-
-    tmp_html = os.path.join(output_dir, f"_tmp_{uuid.uuid4().hex[:6]}.html")
-    with open(tmp_html, "w", encoding="utf-8") as f:
-        f.write(html)
-
-    try:
-        browser = await _get_browser()
-        page = await browser.new_page(viewport={"width": width + 40, "height": 400})
-        await page.goto(f"file:///{tmp_html.replace(os.sep, '/')}", wait_until="networkidle")
-        await page.screenshot(path=output_path, full_page=True)
-        await page.close()
-        _save_page(html, filename)
-        print(f"[render] 思维链图片已保存: {output_path}")
-        return output_path
-    except Exception as e:
-        print(f"[render] 思维链渲染失败: {e}")
-        return None
-    finally:
-        try:
-            os.remove(tmp_html)
-        except OSError:
-            pass
-
-
-async def render_html_to_image(html_content: str, output_dir: str, width: int = 600) -> str | None:
-    """直接渲染已生成的HTML内容（跳过markdown转换），用于ST插件捕获的渲染后DOM"""
-    if not html_content or not html_content.strip():
-        return None
-
-    os.makedirs(output_dir, exist_ok=True)
-
-    html_content = _clean_message(html_content)
-    html_content = _unwrap_html_code_blocks(html_content)
-    html_content = _strip_encoded_html(html_content)
-    html_content = _sanitize_html_block(html_content)
-    html = HTML_TEMPLATE.format(width=width, body=f'<div class="rendered-html">{html_content}</div>')
-
-    filename = f"nc_{uuid.uuid4().hex[:10]}.png"
-    output_path = os.path.join(output_dir, filename)
-
-    tmp_html = os.path.join(output_dir, f"_tmp_{uuid.uuid4().hex[:6]}.html")
-    with open(tmp_html, "w", encoding="utf-8") as f:
-        f.write(html)
-
-    try:
-        browser = await _get_browser()
-        page = await browser.new_page(viewport={"width": width + 40, "height": 600})
-        await page.goto(f"file:///{tmp_html.replace(os.sep, '/')}", wait_until="networkidle")
-        await page.screenshot(path=output_path, full_page=True)
-        await page.close()
-        _save_page(html, filename)
-        print(f"[render] HTML图片已保存: {output_path}")
-        return output_path
-    except Exception as e:
-        print(f"[render] HTML渲染失败: {e}")
-        return None
-    finally:
-        try:
-            os.remove(tmp_html)
-        except OSError:
-            pass

@@ -2,11 +2,11 @@
 .idea
 console_logs
 __pycache__
+.playwright-mcp
 config.ini
 message.json
 response.json
 admin_whitelist.json
-reference
 rendered
-.playwright-mcp
 pages
+reference

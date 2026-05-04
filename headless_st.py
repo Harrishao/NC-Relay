@@ -32,10 +32,6 @@ _processing_lock = False
 _processing_relay_id = None
 
 
-def is_locked():
-    return _processing_lock
-
-
 def acquire_lock(relay_id):
     global _processing_lock, _processing_relay_id
     if _processing_lock:
@@ -511,26 +507,3 @@ async def cancel_processing():
     release_lock()
     return relay_id
 
-
-async def get_last_message() -> str | None:
-    """从ST获取最后一条消息内容"""
-    result = await _page.evaluate(
-        """() => {
-            const st = window.SillyTavern;
-            if (!st) return null;
-            const ctx = st.getContext();
-            if (!ctx || !ctx.chat || ctx.chat.length === 0) return null;
-            const last = ctx.chat[ctx.chat.length - 1];
-            return {
-                content: last.mes || '',
-                sender: last.name || '',
-                is_user: last.is_user || false,
-            };
-        }"""
-    )
-    if not result:
-        return "(聊天记录为空)"
-    content = result["content"]
-    if result.get("sender") and not result.get("is_user"):
-        content = f"[{result['sender']}] {content}"
-    return content
