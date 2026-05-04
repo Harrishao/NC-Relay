@@ -480,6 +480,8 @@ _CMD_HANDLERS = {
     "_cmd_chat":      _cmd_chat,
     "_cmd_char":      _cmd_char,
     "_cmd_del":       _cmd_del,
+    "_cmd_left":      _cmd_left,
+    "_cmd_right":     _cmd_right,
     "_cmd_admin":     _cmd_admin,
     "_cmd_admin_add": _cmd_admin_add,
     "_cmd_admin_del": _cmd_admin_del,
