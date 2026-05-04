@@ -214,6 +214,19 @@ async def swipe_right() -> str | None:
         return None
 
 
+async def regenerate() -> bool:
+    """通过ST JS API触发重新生成"""
+    try:
+        await _page.evaluate(
+            "() => window.SillyTavern.getContext().generate('regenerate')"
+        )
+        print("[headless] 已触发重新生成")
+        return True
+    except Exception as e:
+        print(f"[headless] 重新生成失败: {e}")
+        return False
+
+
 async def capture_screenshot(output_dir: str = None) -> str | None:
     """截取最后一条消息容器的截图，包含插件渲染内容，支持溢出内容完整截取"""
     if output_dir is None:

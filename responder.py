@@ -27,6 +27,8 @@ _CMDS = {
     "/del":        "_cmd_del",
     "/left":       "_cmd_left",
     "/right":      "_cmd_right",
+    "/regenerate": "_cmd_regenerate",
+    "/regen":      "_cmd_regenerate",
     "/admin":      "_cmd_admin",
     "/admin.add":  "_cmd_admin_add",
     "/admin.del":  "_cmd_admin_del",
@@ -282,6 +284,48 @@ async def _cmd_right(websocket, data, args):
         await _reply(websocket, data, "截图失败，请稍后重试...")
 
 
+async def _cmd_regenerate(websocket, data, args):
+    user_id = str(data.get("user_id", ""))
+
+    if not admin.is_whitelisted(user_id):
+        await _reply(websocket, data, "管理员模式已开启，可是你不在白名单哦...")
+        return
+
+    msg_type = data.get("message_type")
+    if msg_type not in ("private", "group"):
+        return
+
+    group_id = data.get("group_id")
+    relay_id = str(uuid.uuid4())[:8]
+
+    if not headless_st.acquire_lock(relay_id):
+        await _reply(websocket, data, "有处理中的消息，等一会吧...或者使用/stop 中止？")
+        return
+
+    try:
+        ok = await headless_st.regenerate()
+        if not ok:
+            await _reply(websocket, data, "重新生成触发失败，请稍后重试...")
+            return
+
+        response = await headless_st.wait_for_response(relay_id)
+        if not response:
+            await _reply(websocket, data, "等待LLM回复超时，请稍后重试...")
+            return
+
+        img = await headless_st.capture_screenshot()
+        if img:
+            if group_id:
+                await echo.echo_group_image(websocket, group_id, img)
+            else:
+                await echo.echo_private_image(websocket, user_id, img)
+            print(f"[responder] 重新生成截图已发送, user_id={user_id}")
+        else:
+            await _reply(websocket, data, "截图失败，请稍后重试...")
+    finally:
+        headless_st.release_lock()
+
+
 async def _cmd_ss(websocket, data, args):
     user_id = str(data.get("user_id", ""))
 
@@ -353,6 +397,42 @@ async def _cmd_chat(websocket, data, args):
         await _reply(websocket, data, "获取聊天列表失败。")
         return
 
+    # 如果带了数字参数，直接跳转到对应聊天
+    args_stripped = args.strip()
+    if args_stripped:
+        try:
+            index = int(args_stripped)
+        except (ValueError, TypeError):
+            await _reply(websocket, data, "参数无效，请输入 /chat <数字序号>")
+            return
+
+        if index < 0 or index >= len(chats):
+            await _reply(websocket, data, "序号超出范围。")
+            return
+
+        chat = chats[index]
+        file_name = chat.get("file_name", "")
+        if not file_name:
+            await _reply(websocket, data, "无法获取聊天文件名。")
+            return
+
+        ok = await headless_st.open_chat(file_name)
+        if not ok:
+            await _reply(websocket, data, "切换聊天失败。")
+            return
+
+        await asyncio.sleep(CHAT_SWITCH_DELAY)
+        img = await headless_st.capture_screenshot()
+        if img:
+            if group_id:
+                await echo.echo_group_image(websocket, group_id, img)
+            else:
+                await echo.echo_private_image(websocket, user_id, img)
+            print(f"[responder] 聊天直达截图已发送, user_id={user_id}")
+        else:
+            await _reply(websocket, data, "截图失败，请稍后重试...")
+        return
+
     # 格式化markdown — 用blockquote保持视觉层次
     lines = [f"# 最近聊天 ({len(chats)}条)", ""]
     for i, c in enumerate(chats):
@@ -409,6 +489,69 @@ async def _cmd_char(websocket, data, args):
     chars = await headless_st.fetch_characters()
     if not chars:
         await _reply(websocket, data, "获取角色卡列表失败。")
+        return
+
+    # 如果带了数字参数，直接选择对应角色
+    args_stripped = args.strip()
+    if args_stripped:
+        try:
+            index = int(args_stripped)
+        except (ValueError, TypeError):
+            await _reply(websocket, data, "参数无效，请输入 /char <数字序号>")
+            return
+
+        if index < 0 or index >= len(chars):
+            await _reply(websocket, data, "序号超出范围。")
+            return
+
+        char = chars[index]
+        avatar = char.get("avatar", "")
+        char_name = char.get("name", "?")
+
+        chats = await headless_st.fetch_character_chats(avatar)
+        if not chats:
+            await _reply(websocket, data, f"角色[{char_name}]没有聊天记录。")
+            return
+
+        if len(chats) == 1:
+            # 仅一条聊天，直接跳转
+            file_name = chats[0].get("file_name", "")
+            if not file_name:
+                await _reply(websocket, data, "无法获取聊天文件名。")
+                return
+            ok = await headless_st.open_chat(file_name)
+            if not ok:
+                await _reply(websocket, data, "切换聊天失败。")
+                return
+            await asyncio.sleep(CHAT_SWITCH_DELAY)
+            img = await headless_st.capture_screenshot()
+            if img:
+                if group_id:
+                    await echo.echo_group_image(websocket, group_id, img)
+                else:
+                    await echo.echo_private_image(websocket, user_id, img)
+                print(f"[responder] 角色直达截图已发送, user_id={user_id}")
+            else:
+                await _reply(websocket, data, "截图失败，请稍后重试...")
+        else:
+            # 多条聊天，展示列表等待进一步选择
+            lines = [f"# {char_name} 的聊天记录 ({len(chats)}条)", ""]
+            for i, c in enumerate(chats):
+                fname = c.get("file_name", "?").replace(".jsonl", "")
+                items = c.get("chat_items", 0)
+                size = c.get("file_size", "?")
+                lines.append(f"**{i}** — {fname}")
+                lines.append(f"> 消息: {items} | 大小: {size}")
+                lines.append("")
+            md = "\n".join(lines)
+            img = await render.render_to_image(md, headless_st.RENDER_OUTPUT_DIR)
+            if img:
+                if group_id:
+                    await echo.echo_group_image(websocket, group_id, img)
+                else:
+                    await echo.echo_private_image(websocket, user_id, img)
+            _set_pending(user_id, "chat_pick_for_char", chats, websocket, group_id)
+            print(f"[responder] 等待用户选择 {char_name} 的聊天记录...")
         return
 
     # 格式化markdown
@@ -482,6 +625,7 @@ _CMD_HANDLERS = {
     "_cmd_del":       _cmd_del,
     "_cmd_left":      _cmd_left,
     "_cmd_right":     _cmd_right,
+    "_cmd_regenerate": _cmd_regenerate,
     "_cmd_admin":     _cmd_admin,
     "_cmd_admin_add": _cmd_admin_add,
     "_cmd_admin_del": _cmd_admin_del,
