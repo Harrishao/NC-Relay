@@ -99,6 +99,14 @@ def _cleanup():
 atexit.register(_cleanup)
 
 
+async def dismiss_toasts():
+    """清除ST页面上所有toastr通知，避免遮挡截图内容"""
+    try:
+        await _page.evaluate("() => { if (typeof toastr !== 'undefined') toastr.clear(); }")
+    except Exception:
+        pass
+
+
 async def inject_message(text: str, relay_id: str) -> bool:
     """向ST注入消息并点击发送"""
     clean = re.sub(r'^/st\s*', '', text)
@@ -177,6 +185,8 @@ async def capture_screenshot(output_dir: str = None) -> str | None:
     os.makedirs(output_dir, exist_ok=True)
     filename = f"nc_{uuid.uuid4().hex[:10]}.png"
     output_path = os.path.join(output_dir, filename)
+
+    await dismiss_toasts()
 
     try:
         # 优先截取完整消息容器(.mes)，比.mes_text包含更多渲染内容
@@ -275,6 +285,8 @@ async def capture_full_screenshot(output_dir: str = None) -> str | None:
     filename = f"nc_{uuid.uuid4().hex[:10]}.png"
     output_path = os.path.join(output_dir, filename)
 
+    await dismiss_toasts()
+
     try:
         await _page.screenshot(path=output_path, full_page=True)
         print(f"[headless] 全页截图已保存: {output_path}")
@@ -350,7 +362,8 @@ async def open_chat(file_name: str) -> bool:
             }""",
             clean_file,
         )
-        await _page.wait_for_timeout(1000)
+        await _page.wait_for_timeout(CHAT_SWITCH_DELAY * 1000)
+        await dismiss_toasts()
         print(f"[headless] 已打开聊天: {file_name}")
         return True
     except Exception as e:
