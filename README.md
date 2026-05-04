@@ -46,7 +46,7 @@ playwright install chromium
 ```ini
 [server]
 port = 6199              # NapCat WebSocket 客户端连接的端口
-debug = false            # 不用管这个，保持 false 就对了
+debug = false            # 设为 true 则输出更详细的日志
 
 [admin]
 admins = <账号>           # 一级管理员账号，多个用英文半角逗号分隔
