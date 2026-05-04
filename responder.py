@@ -25,6 +25,8 @@ _CMDS = {
     "/msg":        "_cmd_chat",
     "/char":       "_cmd_char",
     "/del":        "_cmd_del",
+    "/left":       "_cmd_left",
+    "/right":      "_cmd_right",
     "/admin":      "_cmd_admin",
     "/admin.add":  "_cmd_admin_add",
     "/admin.del":  "_cmd_admin_del",
@@ -212,6 +214,72 @@ async def _cmd_del(websocket, data, args):
         print(f"[responder] 删除确认截图已发送, user_id={user_id}")
     else:
         await _reply(websocket, data, f"已删除 {n} 条消息。")
+
+
+async def _cmd_left(websocket, data, args):
+    user_id = str(data.get("user_id", ""))
+
+    if not admin.is_whitelisted(user_id):
+        await _reply(websocket, data, "管理员模式已开启，可是你不在白名单哦...")
+        return
+
+    msg_type = data.get("message_type")
+    if msg_type not in ("private", "group"):
+        return
+
+    group_id = data.get("group_id")
+
+    ok = await headless_st.swipe_left()
+    if not ok:
+        await _reply(websocket, data, "左翻页失败，没有更多备选回复或当前不在聊天中。")
+        return
+
+    img = await headless_st.capture_screenshot()
+    if img:
+        if group_id:
+            await echo.echo_group_image(websocket, group_id, img)
+        else:
+            await echo.echo_private_image(websocket, user_id, img)
+        print(f"[responder] 左翻页截图已发送, user_id={user_id}")
+    else:
+        await _reply(websocket, data, "截图失败，请稍后重试...")
+
+
+async def _cmd_right(websocket, data, args):
+    user_id = str(data.get("user_id", ""))
+
+    if not admin.is_whitelisted(user_id):
+        await _reply(websocket, data, "管理员模式已开启，可是你不在白名单哦...")
+        return
+
+    msg_type = data.get("message_type")
+    if msg_type not in ("private", "group"):
+        return
+
+    group_id = data.get("group_id")
+    relay_id = str(uuid.uuid4())[:8]
+
+    result = await headless_st.swipe_right()
+    if result is None:
+        await _reply(websocket, data, "右翻页失败，当前不在聊天中。")
+        return
+
+    # 如果触发了新生成，需要等待LLM完成
+    if result == "generating":
+        response = await headless_st.wait_for_response(relay_id)
+        if not response:
+            await _reply(websocket, data, "等待LLM回复超时...")
+            return
+
+    img = await headless_st.capture_screenshot()
+    if img:
+        if group_id:
+            await echo.echo_group_image(websocket, group_id, img)
+        else:
+            await echo.echo_private_image(websocket, user_id, img)
+        print(f"[responder] 右翻页截图已发送, user_id={user_id}")
+    else:
+        await _reply(websocket, data, "截图失败，请稍后重试...")
 
 
 async def _cmd_ss(websocket, data, args):

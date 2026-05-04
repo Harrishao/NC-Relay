@@ -177,6 +177,44 @@ async def wait_for_response(relay_id: str, timeout: float = 120.0) -> dict | Non
     return result
 
 
+async def swipe_left() -> bool:
+    """切换到上一个备选回复（左翻页）"""
+    try:
+        btn = _page.locator(".mes.last_mes .swipe_left")
+        await btn.wait_for(state="visible", timeout=3000)
+        await btn.click()
+        await _page.wait_for_timeout(300)
+        await dismiss_toasts()
+        print("[headless] 已向左翻页")
+        return True
+    except Exception as e:
+        print(f"[headless] 左翻页失败: {e}")
+        return False
+
+
+async def swipe_right() -> str | None:
+    """切换到下一个备选回复（右翻页），若在最后一条则可能触发新生成
+    返回 'swiped' 表示已切换，'generating' 表示触发了LLM生成，None 表示失败"""
+    try:
+        btn = _page.locator(".mes.last_mes .swipe_right")
+        await btn.wait_for(state="visible", timeout=3000)
+        await btn.click()
+
+        # 检测是否触发了新生成
+        try:
+            await _page.wait_for_selector("#mes_stop", state="visible", timeout=2000)
+            print("[headless] 右翻页触发了新生成")
+            return "generating"
+        except Exception:
+            await _page.wait_for_timeout(300)
+            await dismiss_toasts()
+            print("[headless] 已向右翻页")
+            return "swiped"
+    except Exception as e:
+        print(f"[headless] 右翻页失败: {e}")
+        return None
+
+
 async def capture_screenshot(output_dir: str = None) -> str | None:
     """截取最后一条消息容器的截图，包含插件渲染内容，支持溢出内容完整截取"""
     if output_dir is None:
