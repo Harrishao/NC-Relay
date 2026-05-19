@@ -2,7 +2,7 @@
 
 NapCat ↔ SillyTavern 双向消息桥接服务 — 通过 NapCat 接收 QQ 消息，以 Playwright 无头浏览器直接操作 SillyTavern 页面触发 LLM 对话，并将 AI 回复以截图形式实时回传 QQ。
 
-理论上其他支持 OneBot v11 协议的框架也可使用。
+理论上其他支持 OneBot v11 协议的实现端也可使用。
 
 ## 消息流程
 
