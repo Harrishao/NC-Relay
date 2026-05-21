@@ -516,6 +516,67 @@ async def delete_messages(n: int = 1) -> bool:
         return False
 
 
+async def fetch_personas() -> list:
+    """获取所有用户设定(personalist)"""
+    try:
+        data = await _page.evaluate(
+            """() => {
+                const containers = document.querySelectorAll('#user_avatar_block .avatar-container');
+                if (!containers.length) return [];
+                const result = [];
+                containers.forEach(c => {
+                    const nameEl = c.querySelector('.ch_name');
+                    const descEl = c.querySelector('.ch_description');
+                    result.push({
+                        avatar_id: c.getAttribute('data-avatar-id') || '',
+                        name: nameEl ? nameEl.textContent.trim() : '',
+                        description: descEl ? descEl.textContent.trim().substring(0, 200) : '',
+                    });
+                });
+                return result;
+            }"""
+        )
+        print(f"[headless] 获取到 {len(data)} 个用户设定")
+        return data
+    except Exception as e:
+        print(f"[headless] 获取用户设定列表失败: {e}")
+        return []
+
+
+async def select_persona(avatar_id: str) -> bool:
+    """通过 avatar_id 选择用户设定"""
+    try:
+        result = await _page.evaluate(
+            """(avatar_id) => {
+                const container = document.querySelector(`#user_avatar_block .avatar-container[data-avatar-id="${avatar_id}"]`);
+                if (!container) return false;
+                container.click();
+                return true;
+            }""",
+            avatar_id,
+        )
+        if result:
+            print(f"[headless] 已选择用户设定: {avatar_id}")
+        else:
+            print(f"[headless] 未找到用户设定: {avatar_id}")
+        return bool(result)
+    except Exception as e:
+        print(f"[headless] 选择用户设定失败: {e}")
+        return False
+
+
+async def get_current_persona() -> str:
+    """获取当前激活的用户设定名称"""
+    try:
+        name = await _page.evaluate(
+            "() => window.SillyTavern.getContext().name1 || ''"
+        )
+        return name
+    except Exception as e:
+        print(f"[headless] 获取当前用户设定失败: {e}")
+        return ""
+
+
 async def delete_chat(file_name: str) -> bool:
     """通过API删除指定聊天文件"""
     try:

@@ -32,6 +32,7 @@ _CMDS = {
     "/admin":      "_cmd_admin",
     "/admin.add":  "_cmd_admin_add",
     "/admin.del":  "_cmd_admin_del",
+    "/user":       "_cmd_user",
 }
 
 # 待处理交互状态 {user_id: {action, data, group_id, websocket, expires_at}}
@@ -583,6 +584,70 @@ async def _cmd_char(websocket, data, args):
     _set_pending(user_id, "char_pick", chars, websocket, group_id)
 
 
+async def _cmd_user(websocket, data, args):
+    user_id = str(data.get("user_id", ""))
+
+    if not admin.is_whitelisted(user_id):
+        await _reply(websocket, data, "管理员模式已开启，可是你不在白名单哦...")
+        return
+
+    msg_type = data.get("message_type")
+    if msg_type not in ("private", "group"):
+        return
+
+    group_id = data.get("group_id")
+
+    personas = await headless_st.fetch_personas()
+    if not personas:
+        await _reply(websocket, data, "获取用户设定列表失败。")
+        return
+
+    # 如果带了数字参数，直接选择对应persona
+    args_stripped = args.strip()
+    if args_stripped:
+        try:
+            index = int(args_stripped)
+        except (ValueError, TypeError):
+            await _reply(websocket, data, "参数无效，请输入 /user <数字序号>")
+            return
+
+        if index < 0 or index >= len(personas):
+            await _reply(websocket, data, f"序号超出范围，共 {len(personas)} 个用户设定。")
+            return
+
+        p = personas[index]
+        ok = await headless_st.select_persona(p["avatar_id"])
+        if not ok:
+            await _reply(websocket, data, "切换用户设定失败。")
+            return
+
+        current = await headless_st.get_current_persona()
+        await _reply(websocket, data, f"已切换用户设定为: {current} (序号:{index})")
+        return
+
+    # 格式化markdown
+    lines = [f"# 用户设定列表 ({len(personas)}个)", ""]
+    for i, p in enumerate(personas):
+        name = p.get("name", "?")
+        desc = (p.get("description", "") or "[无描述]")[:80]
+        lines.append(f"**{i}** — {name}")
+        if desc:
+            lines.append(f"> {desc}")
+        lines.append("")
+
+    lines.append("使用 /user <序号> 选择用户设定")
+    md = "\n".join(lines)
+    img = await render.render_to_image(md, headless_st.RENDER_OUTPUT_DIR)
+    if img:
+        if group_id:
+            await echo.echo_group_image(websocket, group_id, img)
+        else:
+            await echo.echo_private_image(websocket, user_id, img)
+        print(f"[responder] 用户设定列表已发送, user_id={user_id}")
+
+    _set_pending(user_id, "user_pick", personas, websocket, group_id)
+
+
 async def _cmd_admin(websocket, data, args):
     user_id = str(data.get("user_id", ""))
     if not admin.is_l1_admin(user_id):
@@ -631,6 +696,7 @@ _CMD_HANDLERS = {
     "_cmd_admin":     _cmd_admin,
     "_cmd_admin_add": _cmd_admin_add,
     "_cmd_admin_del": _cmd_admin_del,
+    "_cmd_user":      _cmd_user,
 }
 
 
@@ -824,6 +890,24 @@ async def _handle_pending(websocket, data, pending, raw_text):
             else:
                 await echo.echo_private_image(websocket, str(data.get("user_id", "")), img)
             print(f"[responder] 聊天切换确认截图已发送")
+        _clear_pending(str(data.get("user_id", "")))
+
+    elif action == "user_pick":
+        personas = p_data
+        if index < 0 or index >= len(personas):
+            await _reply(websocket, data, "序号超出范围，已返回待命状态。")
+            _clear_pending(str(data.get("user_id", "")))
+            return
+
+        p = personas[index]
+        ok = await headless_st.select_persona(p["avatar_id"])
+        if not ok:
+            await _reply(websocket, data, "切换用户设定失败。")
+            _clear_pending(str(data.get("user_id", "")))
+            return
+
+        current = await headless_st.get_current_persona()
+        await _reply(websocket, data, f"已切换用户设定为: {current} (序号:{index})")
         _clear_pending(str(data.get("user_id", "")))
 
 
